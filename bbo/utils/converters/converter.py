@@ -242,7 +242,7 @@ class DefaultInputConverter(BaseInputConverter):
 
     def convert(self, trials: Sequence[Trial]) -> np.ndarray:
         if not trials:
-            return np.zeros(0, self._output_spec.num_dimensions)
+            return np.zeros((0, self._output_spec.num_dimensions))
 
         if self.spec.type == NumpyArraySpecType.DOUBLE:
             values = [t.parameters[self._pc.name].value for t in trials]
@@ -273,7 +273,7 @@ class DefaultInputConverter(BaseInputConverter):
             NumpyArraySpecType.CATEGORICAL,
             NumpyArraySpecType.DISCRETE,
         ):
-            return [ParameterValue(self._pc.feasible_values[v]) for v in values]
+            return [ParameterValue(self._pc.feasible_values[int(v)]) for v in values]
 
     @property
     def output_spec(self):
@@ -373,7 +373,7 @@ class DefaultTrialConverter(BaseTrialConverter):
         return parameters
         
     def _to_metrics(self, labels: Dict[str, np.ndarray]) -> List[MetricDict]:
-        size = next(iter(labels.values)).shape[0]
+        size = next(iter(labels.values())).shape[0]
         metrics = [MetricDict() for _ in range(size)]
         for name, converter in self.output_converter_dict.items():
             metric_values = converter.to_metrics(labels[name])
@@ -418,7 +418,7 @@ class ArrayTrialConverter(BaseTrialConverter):
         return dict2array(self._impl.to_labels(trials))
 
     def to_trials(self, features: np.ndarray, labels: np.ndarray=None) -> Sequence[Trial]:
-        size = next(iter(features.values())).shape[0]
+        size = features.shape[0]
         
         parameters = [ParameterDict() for _ in range(size)]
         feature_fmt = self._impl.to_features([])
