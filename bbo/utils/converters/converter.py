@@ -321,11 +321,20 @@ class DefaultTrialConverter(BaseTrialConverter):
         }
 
     @classmethod
-    def from_problem(cls, problem: ProblemStatement):
-        parameter_configs = problem.search_space.parameter_configs
-        objectives = problem.objective.metric_informations
+    def from_problem(
+        cls,
+        problem: ProblemStatement,
+        *,
+        scale: bool = True,
+        onehot_embed: bool = False,
+    ):
+        parameter_configs = problem.search_space.parameters
+        objectives = problem.objective.metrics
 
-        input_converters = [DefaultInputConverter(pc) for pc in parameter_configs]
+        input_converters = [
+            DefaultInputConverter(pc, scale=scale, onehot_embed=onehot_embed)
+            for pc in parameter_configs
+        ]
         output_converters = [DefaultOutputConverter(m) for m in objectives]
 
         return cls(input_converters, output_converters)
@@ -354,16 +363,16 @@ class DefaultTrialConverter(BaseTrialConverter):
         labels: Dict[str, np.ndarray] = None
     ) -> Sequence[Trial]:
         trials = []
-        parameters = self._to_parameters(features)
+        parameters = self.to_parameters(features)
         if labels is not None:
-            metrics = self._to_metrics(labels)
+            metrics = self.to_metrics(labels)
         else:
             metrics = [None for _ in range(len(parameters))]
         for p, m in zip(parameters, metrics):
             trials.append(Trial(parameters=p, metrics=m))
         return trials
 
-    def _to_parameters(self, features: Dict[str, np.ndarray]) -> List[ParameterDict]:
+    def to_parameters(self, features: Dict[str, np.ndarray]) -> List[ParameterDict]:
         size = next(iter(features.values())).shape[0]
         parameters = [ParameterDict() for _ in range(size)]
         for name, converter in self.input_converter_dict.items():
@@ -372,7 +381,7 @@ class DefaultTrialConverter(BaseTrialConverter):
                 p[name] = v
         return parameters
         
-    def _to_metrics(self, labels: Dict[str, np.ndarray]) -> List[MetricDict]:
+    def to_metrics(self, labels: Dict[str, np.ndarray]) -> List[MetricDict]:
         size = next(iter(labels.values())).shape[0]
         metrics = [MetricDict() for _ in range(size)]
         for name, converter in self.output_converter_dict.items():
@@ -383,11 +392,11 @@ class DefaultTrialConverter(BaseTrialConverter):
 
     @property
     def output_spec(self) -> Dict[str, NumpyArraySpec]:
-        return {k: v.output_spec for k, v in self.input_converter_dict.values()}
+        return {k: v.output_spec for k, v in self.input_converter_dict.items()}
 
     @property
     def metric_spec(self) -> Dict[str, MetricInformation]:
-        return {k: v.metric_information for k, v in self.output_converter_dict.values()}
+        return {k: v.metric_information for k, v in self.output_converter_dict.items()}
 
 
 def dict2array(d: Dict) -> np.ndarray:
@@ -403,9 +412,17 @@ class ArrayTrialConverter(BaseTrialConverter):
         self._impl = DefaultTrialConverter(input_converters, output_converters)
 
     @classmethod
-    def from_problem(cls, problem: ProblemStatement):
+    def from_problem(
+        cls,
+        problem: ProblemStatement,
+        *,
+        scale: bool = True,
+        onehot_embed: bool = False,
+    ):
         converter = cls([], [])
-        converter._impl = DefaultTrialConverter.from_problem(problem)
+        converter._impl = DefaultTrialConverter.from_problem(
+            problem, scale=scale, onehot_embed=onehot_embed
+        )
         return converter
 
     def convert(self, trials: Sequence[Trial]) -> Tuple[np.ndarray, np.ndarray]:
@@ -418,8 +435,18 @@ class ArrayTrialConverter(BaseTrialConverter):
         return dict2array(self._impl.to_labels(trials))
 
     def to_trials(self, features: np.ndarray, labels: np.ndarray=None) -> Sequence[Trial]:
+        trials = []
+        parameters = self.to_parameters(features)
+        if labels is not None:
+            metrics = self.to_metrics(labels)
+        else:
+            metrics = [None for _ in range(len(parameters))]
+        for p, m in zip(parameters, metrics):
+            trials.append(Trial(parameters=p, metrics=m))
+        return trials
+
+    def to_parameters(self, features: np.ndarray) -> List[ParameterDict]:
         size = features.shape[0]
-        
         parameters = [ParameterDict() for _ in range(size)]
         feature_fmt = self._impl.to_features([])
         start, end = 0, 0
@@ -429,24 +456,23 @@ class ArrayTrialConverter(BaseTrialConverter):
             start = end
             for p, v in zip(parameters, parameter_values):
                 p[name] = v
-        
-        if labels is not None:
-            metrics = [MetricDict() for _ in range(size)]
-            curr = 0
-            for name, converter in self._impl.output_converter_dict.items():
-                metric_values = converter.to_metrics(labels[:, curr])
-                curr += 1
-                for m, v in zip(metrics, metric_values):
-                    m[name] = v
-        else:
-            metrics = [None for _ in range(size)]
+        return parameters
 
-        return [Trial(parameters=p, metrics=m) for p, m in zip(parameters, metrics)]
+    def to_metrics(self, labels: np.ndarray) -> List[MetricDict]:
+        size = labels.shape[0]
+        metrics = [MetricDict() for _ in range(size)]
+        curr = 0
+        for name, converter in self._impl.output_converter_dict.items():
+            metric_values = converter.to_metrics(labels[:, curr])
+            curr += 1
+            for m, v in zip(metrics, metric_values):
+                m[name] = v
+        return metrics
 
     @property
     def output_spec(self) -> Dict[str, NumpyArraySpec]:
-        return {k: v.output_spec for k, v in self._impl.input_converter_dict.values()}
+        return {k: v.output_spec for k, v in self._impl.input_converter_dict.items()}
 
     @property
     def metric_spec(self) -> Dict[str, MetricInformation]:
-        return {k: v.metric_information for k, v in self._impl.output_converter_dict.values()}
+        return {k: v.metric_information for k, v in self._impl.output_converter_dict.items()}
