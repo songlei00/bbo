@@ -124,4 +124,9 @@ def is_better_than(
             is_better.append(comp)
         else:
             raise ValueError('Unsupported goal: {}'.format(metric_information.goal))
-    return all(is_better)
+
+    if len(is_better) > 1:
+        # multi objective
+        raise NotImplementedError('Unsupported for multi objective')
+    else:
+        return is_better[0]
