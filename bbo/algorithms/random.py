@@ -21,7 +21,7 @@ class RandomDesigner(Designer):
 
     def __attrs_post_init__(self):
         self._converter = DefaultTrialConverter.from_problem(self._problem_statement)
-        self._rng = np.random.RandomState(self._seed)
+        # self._rng = np.random.RandomState(self._seed)
 
     def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         count = count or 1
@@ -29,13 +29,13 @@ class RandomDesigner(Designer):
         for name, spec in self._converter.output_spec.items():
             lb, ub = spec.bounds
             if spec.type == NumpyArraySpecType.DOUBLE:
-                sample[name] = self._rng.rand(count, 1) * (ub - lb) + lb
+                sample[name] = np.random.rand(count, 1) * (ub - lb) + lb
             elif spec.type in (
                 NumpyArraySpecType.CATEGORICAL,
                 NumpyArraySpecType.DISCRETE,
                 NumpyArraySpecType.INTEGER,
             ):
-                sample[name] = self._rng.randint(lb, ub+1, (count, 1))
+                sample[name] = np.random.randint(lb, ub+1, (count, 1))
             else:
                 raise ValueError('Unsupported type: {}'.format(spec.type))
 

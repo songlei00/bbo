@@ -1,4 +1,3 @@
-import enum
 import copy
 from datetime import datetime
 from typing import Union, Optional
@@ -6,6 +5,7 @@ from collections import UserDict
 
 from attrs import define, field, validators
 
+from bbo.utils.metric_config import Objective, ObjectiveMetricGoal
 from bbo.utils.metadata import Metadata
 
 
@@ -107,3 +107,21 @@ class Trial:
     ):
         # Use setattr to run the validator for metrics
         self.__setattr__('metrics', copy.deepcopy(metrics))
+
+
+def is_better_than(
+    objective: Objective,
+    trial1: Trial,
+    trial2: Trial,
+) -> bool:
+    is_better = []
+    for name, metric_information in objective.metric_informations.items():
+        if metric_information.goal == ObjectiveMetricGoal.MAXIMIZE:
+            comp = trial1.metrics[name].value > trial2.metrics[name].value
+            is_better.append(comp)
+        elif metric_information.goal == ObjectiveMetricGoal.MINIMIZE:
+            comp = trial1.metrics[name].value < trial2.metrics[name].value
+            is_better.append(comp)
+        else:
+            raise ValueError('Unsupported goal: {}'.format(metric_information.goal))
+    return all(is_better)
