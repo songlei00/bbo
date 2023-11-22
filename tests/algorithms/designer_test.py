@@ -5,6 +5,7 @@ from bbo.benchmarks.experimenters.numpy_experimenter import NumpyExperimenter
 from bbo.algorithms.random import RandomDesigner
 from bbo.algorithms.local_search import LocalSearchDesigner
 from bbo.algorithms.regularized_evolution import RegularizedEvolutionDesigner
+from bbo.algorithms.grid import GridSearchDesigner
 from bbo.utils.parameter_config import SearchSpace
 from bbo.utils.metric_config import (
     ObjectiveMetricGoal,
@@ -29,6 +30,8 @@ class DesignerTest(unittest.TestCase):
             RandomDesigner(problem_statement),
             LocalSearchDesigner(problem_statement),
             RegularizedEvolutionDesigner(problem_statement),
+            GridSearchDesigner(problem_statement),
+            GridSearchDesigner(problem_statement, shuffle=True),
         ]
 
     def test_run(self):
