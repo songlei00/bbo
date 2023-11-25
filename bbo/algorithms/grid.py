@@ -6,7 +6,6 @@ from attrs import define, field, validators
 
 from bbo.algorithms.base import Designer
 from bbo.utils.problem_statement import ProblemStatement
-from bbo.utils.converters.converter import DefaultTrialConverter
 from bbo.utils.parameter_config import ParameterConfig, ParameterType
 from bbo.utils.trial import Trial, ParameterDict, ParameterValue
 

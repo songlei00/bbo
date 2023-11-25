@@ -55,7 +55,7 @@ class RegularizedEvolutionDesigner(Designer):
     def _tournament(self) -> Trial:
         idx = np.random.choice(self._population_size, self._tournament_size, replace=False)
         candidates = [self._population[i] for i in idx]
-        ys = [list(cand.metrics.values())[0] for cand in candidates]
+        ys = [list(cand.metrics.values())[0].value for cand in candidates]
         goal = self._problem_statement.objective.metrics[0]
         if goal == ObjectiveMetricGoal.MAXIMIZE:
             i = np.argmax(ys)
@@ -65,7 +65,7 @@ class RegularizedEvolutionDesigner(Designer):
         return winner
 
     def _mutate_one(self, trial: Trial) -> Trial:
-        sample = self._converter.to_features(trial)
+        sample = self._converter.to_features([trial])
         mutate_keys = np.random.choice(list(self._converter.output_spec), 1, replace=False)
         for key in mutate_keys:
             spec = self._converter.output_spec[key]
