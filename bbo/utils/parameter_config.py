@@ -4,6 +4,7 @@ import copy
 import random
 from typing import Optional, Union, Tuple, Dict, List, Sequence
 
+import numpy as np
 from attrs import define, field, validators
 
 from bbo.utils.trial import ParameterValue, ParameterDict
@@ -226,6 +227,23 @@ class ParameterConfig:
         elif self.type == ParameterType.INTEGER:
             new_value = random.randint(self.bounds[0], self.bounds[1])
         return ParameterValue(new_value)
+
+    def get_closest_value(self, value: ParameterValue) -> ParameterValue:
+        value = value.value
+        if self.type == ParameterType.DOUBLE:
+            value = np.clip(value, self.bounds[0], self.bounds[1])
+        elif self.type == ParameterType.INTEGER:
+            value = np.clip(round(value), self.bounds[0], self.bounds[1])
+        elif self.type == ParameterType.DISCRETE:
+            gaps = [abs(value-i) for i in self.feasible_values]
+            closest_idx = min(enumerate(gaps), key=lambda x: x[1])[0]
+            value = self.feasible_values[closest_idx]
+        elif self.type == ParameterType.CATEGORICAL:
+            assert value in self.feasible_values
+        else:
+            raise ValueError('Unsupported type: {}'.format(self.type))
+
+        return ParameterValue(value)
 
 
 @define
