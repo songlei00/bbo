@@ -4,7 +4,7 @@ from typing import Sequence, List
 import numpy as np
 
 from bbo.utils.metric_config import MetricInformation
-from bbo.utils.trial import ParameterValue, Metric, Trial
+from bbo.utils.trial import ParameterValue, Metric, ParameterDict, MetricDict, Trial
 
 
 class BaseInputConverter(metaclass=ABCMeta):
@@ -63,5 +63,13 @@ class BaseTrialConverter(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def to_trials(self, features, labels) -> Sequence[Trial]:
+    def to_trials(self, features, labels) -> Sequence[ParameterDict]:
+        pass
+
+    @abstractmethod
+    def to_parameters(self, features) -> Sequence[Trial]:
+        pass
+
+    @abstractmethod
+    def to_metrics(self, labels) -> List[MetricDict]:
         pass

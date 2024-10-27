@@ -6,7 +6,7 @@ from bbo.utils.metric_config import MetricInformation, ObjectiveMetricGoal
 from bbo.utils.trial import Trial
 from bbo.utils.parameter_config import ScaleType, SearchSpace
 from bbo.utils.converters.converter import (
-    NumpyArraySpecType,
+    SpecType,
     NumpyArraySpec,
     DefaultInputConverter,
     DefaultOutputConverter,
@@ -27,7 +27,7 @@ class NumpyArraySpecTest(unittest.TestCase):
         for name, pc in self.sp.parameter_configs.items():
             spec = NumpyArraySpec.from_parameter_config(
                 pc,
-                type_factory=NumpyArraySpecType.default_factory
+                type_factory=SpecType.default_factory
             )
 
 
@@ -66,7 +66,7 @@ class DefaultInputConverterTest(unittest.TestCase):
         converter = DefaultInputConverter(pc)
         output_spec = converter.output_spec
         self.assertEqual(output_spec.name, pc.name)
-        self.assertEqual(output_spec.type, NumpyArraySpecType.DOUBLE)
+        self.assertEqual(output_spec.type, SpecType.DOUBLE)
         self.assertEqual(output_spec.bounds, pc.bounds)
         self.assertEqual(output_spec.num_dimensions, 1)
         self.assertEqual(output_spec.scale_type, None)
@@ -76,7 +76,7 @@ class DefaultInputConverterTest(unittest.TestCase):
         converter = DefaultInputConverter(pc)
         output_spec = converter.output_spec
         self.assertEqual(output_spec.name, pc.name)
-        self.assertEqual(output_spec.type, NumpyArraySpecType.DOUBLE)
+        self.assertEqual(output_spec.type, SpecType.DOUBLE)
         self.assertEqual(output_spec.bounds, (0, 1))
         self.assertEqual(output_spec.num_dimensions, 1)
         self.assertEqual(output_spec.scale_type, None)
@@ -89,7 +89,7 @@ class DefaultInputConverterTest(unittest.TestCase):
         converter = DefaultInputConverter(pc)
         output_spec = converter.output_spec
         self.assertEqual(output_spec.name, pc.name)
-        self.assertEqual(output_spec.type, NumpyArraySpecType.INTEGER)
+        self.assertEqual(output_spec.type, SpecType.INTEGER)
         self.assertEqual(output_spec.bounds, (0, len(pc.feasible_values)-1))
         self.assertEqual(output_spec.num_dimensions, 1)
         self.assertEqual(output_spec.scale_type, None)
@@ -99,7 +99,7 @@ class DefaultInputConverterTest(unittest.TestCase):
         converter = DefaultInputConverter(pc)
         output_spec = converter.output_spec
         self.assertEqual(output_spec.name, pc.name)
-        self.assertEqual(output_spec.type, NumpyArraySpecType.DISCRETE)
+        self.assertEqual(output_spec.type, SpecType.DISCRETE)
         self.assertEqual(output_spec.bounds, (0, len(pc.feasible_values)-1))
         self.assertEqual(output_spec.num_dimensions, 1)
         self.assertEqual(output_spec.scale_type, None)
@@ -109,7 +109,7 @@ class DefaultInputConverterTest(unittest.TestCase):
         converter = DefaultInputConverter(pc)
         output_spec = converter.output_spec
         self.assertEqual(output_spec.name, pc.name)
-        self.assertEqual(output_spec.type, NumpyArraySpecType.CATEGORICAL)
+        self.assertEqual(output_spec.type, SpecType.CATEGORICAL)
         self.assertEqual(output_spec.bounds, (0, len(pc.feasible_values)-1))
         self.assertEqual(output_spec.num_dimensions, 1)
         self.assertEqual(output_spec.scale_type, None)
@@ -119,7 +119,7 @@ class DefaultInputConverterTest(unittest.TestCase):
         converter = DefaultInputConverter(pc, onehot_embed=True)
         output_spec = converter.output_spec
         self.assertEqual(output_spec.name, pc.name)
-        self.assertEqual(output_spec.type, NumpyArraySpecType.ONEHOT_EMBEDDING)
+        self.assertEqual(output_spec.type, SpecType.ONEHOT_EMBEDDING)
         self.assertEqual(output_spec.bounds, (0, 1))
         self.assertEqual(output_spec.num_dimensions, len(pc.feasible_values))
         self.assertEqual(output_spec.scale_type, None)

@@ -213,7 +213,9 @@ class ParameterConfig:
         else:
             return len(self._feasible_values)
 
-    def contains(self, value: Union[float, int, str]) -> bool:
+    def contains(self, value: ParameterValue) -> bool:
+        if isinstance(value, ParameterValue):
+            value = value.value
         if self.type in (ParameterType.DOUBLE, ParameterType.INTEGER):
             return self.bounds[0] <= value <= self.bounds[1]
         elif self.type in (ParameterType.DISCRETE, ParameterType.CATEGORICAL):

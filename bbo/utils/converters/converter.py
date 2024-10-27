@@ -25,35 +25,31 @@ from bbo.utils.trial import (
 from bbo.utils.problem_statement import ProblemStatement
 
 
-class NumpyArraySpecType(enum.Enum):
+class SpecType(enum.Enum):
+    """Type information from the algorithmic perspective
+
+    DOUBLE: continuous variables
+    INTEGER: int
+    DISCRETE: ordered discrete variable
+    CATEGORICAL: unordered discrete variable
+    ONEHOT_EMBEDDING: one-hot embedding
+    DENSE_EMBEDDING: dense embedding
+    """
     DOUBLE = 'DOUBLE'
     INTEGER = 'INTEGER'
-    CATEGORICAL = 'CATEGORICAL'
     DISCRETE = 'DISCRETE'
+    CATEGORICAL = 'CATEGORICAL'
     ONEHOT_EMBEDDING = 'ONEHOT_EMBEDDING'
+    DENSE_EMBEDDING = 'DENSE_EMBEDDING'
 
     @classmethod
     def default_factory(cls, pc: ParameterConfig):
         map_dict = {
-            ParameterType.DOUBLE: NumpyArraySpecType.DOUBLE,
-            ParameterType.INTEGER: NumpyArraySpecType.INTEGER,
-            ParameterType.CATEGORICAL: NumpyArraySpecType.CATEGORICAL,
-            ParameterType.DISCRETE: NumpyArraySpecType.DISCRETE,
+            ParameterType.DOUBLE: SpecType.DOUBLE,
+            ParameterType.INTEGER: SpecType.INTEGER,
+            ParameterType.DISCRETE: SpecType.DISCRETE,
+            ParameterType.CATEGORICAL: SpecType.CATEGORICAL,
         }
-        if pc.type in map_dict:
-            return map_dict[pc.type]
-        else:
-            raise ValueError('Unknown type: {}'.format(pc.type))
-
-    @classmethod
-    def embedding_factory(cls, pc: ParameterConfig):
-        map_dict = {
-            ParameterType.DOUBLE: NumpyArraySpecType.DOUBLE,
-            ParameterType.INTEGER: NumpyArraySpecType.INTEGER,
-            ParameterType.CATEGORICAL: NumpyArraySpecType.ONEHOT_EMBEDDING,
-            ParameterType.DISCRETE: NumpyArraySpecType.DISCRETE,
-        }
-
         if pc.type in map_dict:
             return map_dict[pc.type]
         else:
@@ -69,8 +65,8 @@ class NumpyArraySpec:
     name: str = field(
         validator=validators.instance_of(str),
     )
-    type: NumpyArraySpecType = field(
-        validator=validators.instance_of(NumpyArraySpecType),
+    type: SpecType = field(
+        validator=validators.instance_of(SpecType),
     )
     dtype: np.dtype = field(
         converter=np.dtype,
@@ -97,12 +93,12 @@ class NumpyArraySpec:
         cls,
         pc: ParameterConfig,
         *,
-        type_factory: Callable[[ParameterConfig], NumpyArraySpecType] = NumpyArraySpecType.default_factory,
+        type_factory: Callable[[ParameterConfig], SpecType] = SpecType.default_factory,
         float_dtype: np.dtype = np.float32,
         int_dtype: np.dtype = np.int32,
     ):
         spec_type = type_factory(pc)
-        if spec_type == NumpyArraySpecType.DOUBLE:
+        if spec_type == SpecType.DOUBLE:
             return NumpyArraySpec(
                 name=pc.name,
                 type=spec_type,
@@ -112,18 +108,10 @@ class NumpyArraySpec:
                 scale_type=pc.scale_type,
             )
         elif spec_type in (
-            NumpyArraySpecType.INTEGER,
-            NumpyArraySpecType.CATEGORICAL,
-            NumpyArraySpecType.DISCRETE,
+            SpecType.INTEGER,
+            SpecType.CATEGORICAL,
+            SpecType.DISCRETE,
         ):
-            # We convert INTEGER, CATEGORICAL, DISCRETE parameter configs to 
-            # the same NumpyArraySpec and keep the type so that algorithms can 
-            # distinguish different parameters and use different optimization
-            # strategies
-            # 
-            # For DISCRETE parameters, the convert will ignore the absolute
-            # value but keep the ralative ordering, I don't know if it is a 
-            # big deal
             return NumpyArraySpec(
                 name=pc.name,
                 type=spec_type,
@@ -132,21 +120,12 @@ class NumpyArraySpec:
                 num_dimensions=1,
                 scale_type=pc.scale_type,
             )
-        elif spec_type == NumpyArraySpecType.ONEHOT_EMBEDDING:
-            return NumpyArraySpec(
-                name=pc.name,
-                type=spec_type,
-                dtype=float_dtype,
-                bounds=(0.0, 1.0),
-                num_dimensions=len(pc.feasible_values),
-                scale_type=pc.scale_type,
-            )
         else:
             raise ValueError('Unknown type: {}'.format(spec_type))
 
 
 @define
-class SpecTransform:
+class NumpyArraySpecTransform:
     forward_fn: Callable[[np.ndarray], np.ndarray]
     backward_fn: Callable[[np.ndarray], np.ndarray]
     output_spec: NumpyArraySpec
@@ -157,7 +136,7 @@ class SpecTransform:
 
     @classmethod
     def scaler(cls, spec: NumpyArraySpec):
-        if spec.type != NumpyArraySpecType.DOUBLE:
+        if spec.type != SpecType.DOUBLE:
             return cls.identity(spec)
         
         if spec.scale_type is None:
@@ -190,12 +169,12 @@ class SpecTransform:
 
     @classmethod
     def onehot_embedder(cls, spec: NumpyArraySpec):
-        if spec.type != NumpyArraySpecType.CATEGORICAL:
+        if spec.type not in (SpecType.DISCRETE, SpecType.CATEGORICAL):
             return cls.identity(spec)
 
         output_spec = NumpyArraySpec(
             name=spec.name,
-            type=NumpyArraySpecType.ONEHOT_EMBEDDING,
+            type=SpecType.ONEHOT_EMBEDDING,
             dtype=spec.dtype,
             bounds=(0.0, 1.0),
             num_dimensions=spec.bounds[1]-spec.bounds[0]+1,
@@ -216,40 +195,39 @@ class DefaultInputConverter(BaseInputConverter):
         pc: ParameterConfig,
         *,
         scale: bool = True,
-        onehot_embed: bool = False,
+        onehot_embed: bool = False, # TODO: Maybe we can pass the transforms as an argument
     ):
-        """Do the specific scaling"""
         self._pc = pc
         self.spec = NumpyArraySpec.from_parameter_config(
             pc=pc,
-            type_factory=NumpyArraySpecType.default_factory,
+            type_factory=SpecType.default_factory,
         )
-        # scaler and onehot_embedder are used for spec with different types,
-        # so we can nest them directly
+
+        spec = self.spec
         self.scaler = (
-            SpecTransform.scaler(self.spec)
+            NumpyArraySpecTransform.scaler(spec)
             if scale
-            else SpecTransform.identity(self.spec)
+            else NumpyArraySpecTransform.identity(spec)
         )
         spec = self.scaler.output_spec
         self.onehot_embedder = (
-            SpecTransform.onehot_embedder(spec)
+            NumpyArraySpecTransform.onehot_embedder(spec)
             if onehot_embed
-            else SpecTransform.identity(spec)
+            else NumpyArraySpecTransform.identity(spec)
         )
         spec = self.onehot_embedder.output_spec
         self._output_spec = spec
 
     def convert(self, trials: Sequence[Trial]) -> np.ndarray:
         if not trials:
-            return np.zeros((0, self._output_spec.num_dimensions))
+            return np.zeros((0, self._output_spec.num_dimensions), dtype=self._output_spec.dtype)
 
-        if self.spec.type == NumpyArraySpecType.DOUBLE:
+        if self.spec.type == SpecType.DOUBLE:
             values = [t.parameters[self._pc.name].value for t in trials]
         elif self.spec.type in (
-            NumpyArraySpecType.INTEGER,
-            NumpyArraySpecType.CATEGORICAL,
-            NumpyArraySpecType.DISCRETE,
+            SpecType.INTEGER,
+            SpecType.CATEGORICAL,
+            SpecType.DISCRETE,
         ):
             values = [
                 self._pc.feasible_values.index(t.parameters[self._pc.name].value)
@@ -264,14 +242,16 @@ class DefaultInputConverter(BaseInputConverter):
         )
     
     def to_parameter_values(self, array: np.ndarray) -> List[ParameterValue]:
-        values = self.scaler.backward_fn(self.onehot_embedder.backward_fn(array))
+        values = self.scaler.backward_fn(
+            self.onehot_embedder.backward_fn(array)
+        )
         values = values.flatten()
-        if self.spec.type == NumpyArraySpecType.DOUBLE:
+        if self.spec.type == SpecType.DOUBLE:
             return [ParameterValue(v) for v in values]
         elif self.spec.type in (
-            NumpyArraySpecType.INTEGER,
-            NumpyArraySpecType.CATEGORICAL,
-            NumpyArraySpecType.DISCRETE,
+            SpecType.INTEGER,
+            SpecType.CATEGORICAL,
+            SpecType.DISCRETE,
         ):
             return [ParameterValue(self._pc.feasible_values[int(v)]) for v in values]
 

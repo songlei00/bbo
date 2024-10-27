@@ -2,16 +2,12 @@ import unittest
 
 from bbo.benchmarks.experimenters.synthetic.toy import dummy
 from bbo.benchmarks.experimenters.numpy_experimenter import NumpyExperimenter
-from bbo.algorithms.random import RandomDesigner
-from bbo.algorithms.local_search import LocalSearchDesigner
-from bbo.algorithms.regularized_evolution import RegularizedEvolutionDesigner
-from bbo.algorithms.grid import GridSearchDesigner
-from bbo.algorithms.cmaes import CMAESDesigner
 from bbo.utils.parameter_config import SearchSpace, ScaleType
 from bbo.utils.metric_config import (
     ObjectiveMetricGoal,
     Objective,
 )
+from bbo.algorithms import *
 from bbo.utils.problem_statement import ProblemStatement
 
 
