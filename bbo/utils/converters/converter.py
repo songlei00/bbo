@@ -1,5 +1,6 @@
 import enum
 from typing import Union, Dict, List, Tuple, Callable, Optional, Sequence
+from collections import defaultdict
 
 import numpy as np
 from attrs import define, field, validators, evolve
@@ -321,9 +322,13 @@ class DefaultTrialConverter(BaseTrialConverter):
 
     def convert(
         self,
-        trials: Sequence[Trial]
+        trials: Sequence[Trial],
+        merge_by_type: bool = False,
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
-        return self.to_features(trials), self.to_labels(trials)
+        features, labels = self.to_features(trials), self.to_labels(trials)
+        if merge_by_type:
+            features = self._merge_by_type(features)
+        return features, labels
 
     def to_features(self, trials: Sequence[Trial]) -> Dict[str, np.ndarray]:
         features = dict()
@@ -369,6 +374,15 @@ class DefaultTrialConverter(BaseTrialConverter):
             for m, v in zip(metrics, metric_values):
                 m[name] = v
         return metrics
+    
+    def _merge_by_type(self, features):
+        type2array = defaultdict(list)
+        for name, array in features.items():
+            key = self.input_converter_dict[name].output_spec.type
+            type2array[key].append(array)
+        for k in type2array:
+            type2array[k] = np.concatenate(type2array[k], axis=-1)
+        return type2array
 
     @property
     def output_spec(self) -> Dict[str, NumpyArraySpec]:
