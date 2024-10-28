@@ -293,6 +293,7 @@ class DefaultTrialConverter(BaseTrialConverter):
         self,
         input_converters: Sequence[BaseInputConverter],
         output_converters: Sequence[BaseOutputConverter],
+        merge_by_type: bool = False,
     ):
         self.input_converter_dict = {
             converter.parameter_config.name: converter for converter in input_converters
@@ -300,6 +301,13 @@ class DefaultTrialConverter(BaseTrialConverter):
         self.output_converter_dict = {
             converter.metric_information.name: converter for converter in output_converters
         }
+        self.merge_by_type = merge_by_type
+        if self.merge_by_type:
+            type2name = defaultdict(list)
+            for name in self.input_converter_dict:
+                key = self.input_converter_dict[name].output_spec.type
+                type2name[key].append(name)
+            self.type2name = type2name
 
     @classmethod
     def from_problem(
@@ -308,6 +316,7 @@ class DefaultTrialConverter(BaseTrialConverter):
         *,
         scale: bool = True,
         onehot_embed: bool = False,
+        merge_by_type: bool = False,
     ):
         parameter_configs = problem.search_space.parameters
         objectives = problem.objective.metrics
@@ -318,15 +327,14 @@ class DefaultTrialConverter(BaseTrialConverter):
         ]
         output_converters = [DefaultOutputConverter(m) for m in objectives]
 
-        return cls(input_converters, output_converters)
+        return cls(input_converters, output_converters, merge_by_type)
 
     def convert(
         self,
         trials: Sequence[Trial],
-        merge_by_type: bool = False,
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         features, labels = self.to_features(trials), self.to_labels(trials)
-        if merge_by_type:
+        if self.merge_by_type:
             features = self._merge_by_type(features)
         return features, labels
 
@@ -348,6 +356,13 @@ class DefaultTrialConverter(BaseTrialConverter):
         labels: Dict[str, np.ndarray] = None
     ) -> Sequence[Trial]:
         trials = []
+        if self.merge_by_type:
+            splitted_features = dict()
+            for var_type in self.type2name:
+                for i, name in enumerate(self.type2name[var_type]):
+                    splitted_features[name] = features[var_type][:, i]
+            features = splitted_features
+
         parameters = self.to_parameters(features)
         if labels is not None:
             metrics = self.to_metrics(labels)
