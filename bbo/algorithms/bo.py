@@ -44,9 +44,9 @@ class BODesigner(Designer):
     _mean_config: Optional[dict] = field(default=None, kw_only=True)
     _kernel_type: Optional[str] = field(
         default=None, kw_only=True,
-        validator=validators.optional(validators.in_(['matern52', 'mlp', 'kumar']))
+        validator=validators.optional(validators.in_(['matern52', 'mlp', 'kumar', 'mixed']))
     )
-    _kernel_config: Optional[dict] = field(default=None, kw_only=True)
+    _kernel_config: dict = field(factory=dict, kw_only=True)
 
     # surrogate model optimization configuration
     _mll_optimizer: str = field(
@@ -76,21 +76,34 @@ class BODesigner(Designer):
     def __attrs_post_init__(self):
         self._init_designer = RandomDesigner(self._problem_statement)
         self._converter = DefaultTrialConverter.from_problem(self._problem_statement, merge_by_type=True)
-        lb, ub = [], []
+
+        type2bounds = {
+            SpecType.DOUBLE: {'lb': [], 'ub': []},
+            SpecType.CATEGORICAL: {'lb': [], 'ub': []}
+        }
         for spec in self._converter.output_spec.values():
-            if spec.type == SpecType.DOUBLE:
-                lb.append(spec.bounds[0])
-                ub.append(spec.bounds[1])
+            if spec.type in type2bounds:
+                type2bounds[spec.type]['lb'].append(spec.bounds[0])
+                type2bounds[spec.type]['ub'].append(spec.bounds[1])
             else:
-                raise NotImplementedError('Unsupported variable type for BO')
-        self._lb, self._ub = torch.tensor(lb), torch.tensor(ub)
+                raise NotImplementedError('Unsupported variable type for BO: {}'.format(spec.type))
+        for k in type2bounds:
+            type2bounds[k]['lb'] = torch.tensor(type2bounds[k]['lb'])
+            type2bounds[k]['ub'] = torch.tensor(type2bounds[k]['ub'])
+            
+        self._kernel_config['type2num'] = dict()
+        for k in type2bounds:
+            self._kernel_config['type2num'][k] = len(type2bounds[k]['lb'])
+        
         self._device = torch.device(self._device if torch.cuda.is_available() else 'cpu')
 
     def create_model(self, train_X, train_Y):
         mean_module = mean_factory(self._mean_type, self._mean_config)
         covar_module = kernel_factory(self._kernel_type, self._kernel_config)
-        # logger.info('mean_module: {}'.format(mean_module))
-        # logger.info('covar_module: {}'.format(covar_module))
+        logger.info('='*20)
+        logger.info('mean_module: {}'.format(mean_module))
+        logger.info('covar_module: {}'.format(covar_module))
+        logger.info('='*20)
         model = SingleTaskGP(train_X, train_Y, covar_module=covar_module, mean_module=mean_module)
         model.likelihood.noise_covar.register_constraint('raw_noise', GreaterThan(1e-4))
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
@@ -128,8 +141,8 @@ class BODesigner(Designer):
         return acqf
     
     def optimize_acqf(self, acqf):
-        bounds = torch.vstack((self._lb, self._ub)).double().to(self._device)
         if self._acqf_optimizer == 'l-bfgs':
+            bounds = torch.vstack((self._lb, self._ub)).double().to(self._device)
             next_X, _ = botorch.optim.optimize.optimize_acqf(
                 acqf, bounds=bounds, q=self._q, num_restarts=10, raw_samples=1024
             )
@@ -217,10 +230,11 @@ class BODesigner(Designer):
             count = count or 1
             features, labels = self._converter.convert(self._trials)
 
-            train_X = features
-            if not (SpecType.DOUBLE in train_X and len(train_X) == 1):
-                raise NotImplementedError('Unsupported variable type for BO')
-            train_X = train_X[SpecType.DOUBLE]
+            train_X = []
+            for k in features:
+                features[k] = torch.from_numpy(features[k]).to(self._device)
+                train_X.append(features[k])
+            train_X = torch.cat(train_X, dim=-1).to(self._device)
 
             train_Y = []
             for _, v in labels.items():
@@ -229,17 +243,21 @@ class BODesigner(Designer):
             if train_Y.shape[-1] > 1:
                 raise NotImplementedError('Unsupported for multiobjective BO')
             train_Y = (train_Y - train_Y.mean()) / (train_Y.std() + 1e-6)
-
-            train_X = torch.from_numpy(train_X).double().to(self._device)
             train_Y = torch.from_numpy(train_Y).double().to(self._device)
         
             mll, model = self.create_model(train_X, train_Y)
             self.optimize_model(mll, model, train_X, train_Y)
             acqf = self.create_acqf(model, train_X, train_Y)
             next_X = self.optimize_acqf(acqf)
-            next_X = next_X.to('cpu').numpy()
 
-            features = {SpecType.DOUBLE: next_X}
+            double_next_X, cat_next_X, rest_next_X = torch.tensor_split(
+                next_X, (self._kernel_config['type2num'][SpecType.DOUBLE], self._kernel_config['type2num'][SpecType.DOUBLE]+self._kernel_config['type2num'][SpecType.CATEGORICAL]), dim=-1
+            )
+            assert rest_next_X.shape[-1] == 0
+            features = {
+                SpecType.DOUBLE: double_next_X.to('cpu').numpy(),
+                SpecType.CATEGORICAL: cat_next_X.to('cpu').numpy()
+            }
             ret = self._converter.to_trials(features)
 
         return ret

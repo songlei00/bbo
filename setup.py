@@ -28,4 +28,6 @@ setup(
     packages=find_namespace_packages(include=['bbo*']),
     include_package_data=True,
     install_requires=required,
+    python_requires='>=3.10',
+    license='Apache License 2.0',
 )
