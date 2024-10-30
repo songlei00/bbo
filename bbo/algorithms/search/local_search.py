@@ -4,7 +4,7 @@ import numpy as np
 from attrs import define, field, validators
 
 from bbo.algorithms.base import Designer
-from bbo.algorithms.random import RandomDesigner
+from bbo.algorithms.sampling.random import RandomDesigner
 from bbo.algorithms.heuristic_utils.base_operator import MutationOperator
 from bbo.algorithms.heuristic_utils.mutate_operator import RandomMutation
 from bbo.utils.problem_statement import ProblemStatement

@@ -12,7 +12,7 @@ from pymoo.problems.static import StaticProblem
 from pymoo.core.evaluator import Evaluator
 
 from bbo.algorithms.base import Designer
-from bbo.utils.converters.converter import SpecType, DefaultTrialConverter
+from bbo.utils.converters.converter import DefaultTrialConverter
 from bbo.utils.problem_statement import ProblemStatement
 from bbo.utils.trial import Trial
 from bbo.utils.metric_config import ObjectiveMetricGoal

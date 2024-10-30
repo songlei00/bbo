@@ -5,7 +5,7 @@ import numpy as np
 from attrs import define, field, validators
 
 from bbo.algorithms.base import Designer
-from bbo.algorithms.random import RandomDesigner
+from bbo.algorithms.sampling.random import RandomDesigner
 from bbo.algorithms.heuristic_utils.base_operator import MutationOperator
 from bbo.algorithms.heuristic_utils.mutate_operator import RandomMutation
 from bbo.utils.problem_statement import ProblemStatement
@@ -56,8 +56,8 @@ class RegularizedEvolutionDesigner(Designer):
         idx = np.random.choice(self._population_size, self._tournament_size, replace=False)
         candidates = [self._population[i] for i in idx]
         ys = [list(cand.metrics.values())[0].value for cand in candidates]
-        goal = self._problem_statement.objective.metrics[0]
-        if goal == ObjectiveMetricGoal.MAXIMIZE:
+        metric = self._problem_statement.objective.metrics[0]
+        if metric.goal == ObjectiveMetricGoal.MAXIMIZE:
             i = np.argmax(ys)
         else:
             i = np.argmin(ys)
@@ -72,3 +72,13 @@ class RegularizedEvolutionDesigner(Designer):
             new_v = self._mutate_operator(sample[key], spec)
             sample[key] = new_v
         return self._converter.to_trials(sample)[0]
+    
+    def result(self) -> Sequence[Trial]:
+        labels = self._converter.to_labels(self._population)
+        metric = self._problem_statement.objective.metrics[0]
+        ys = labels[metric.name]
+        if metric.goal == ObjectiveMetricGoal.MAXIMIZE:
+            i = np.argmax(ys)
+        else:
+            i = np.argmin(ys)
+        return [self._population[i]]

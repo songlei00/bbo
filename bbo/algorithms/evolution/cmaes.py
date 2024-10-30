@@ -6,7 +6,7 @@ import cma
 import numpy as np
 
 from bbo.algorithms.base import Designer
-from bbo.algorithms.random import RandomDesigner
+from bbo.algorithms.sampling.random import RandomDesigner
 from bbo.utils.problem_statement import ProblemStatement
 from bbo.utils.converters.converter import ArrayTrialConverter
 from bbo.utils.parameter_config import ParameterType
