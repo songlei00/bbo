@@ -254,6 +254,7 @@ class DefaultInputConverter(BaseInputConverter):
             SpecType.CATEGORICAL,
             SpecType.DISCRETE,
         ):
+            # TODO: add a check for integer
             return [ParameterValue(self._pc.feasible_values[int(v)]) for v in values]
 
     @property

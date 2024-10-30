@@ -12,7 +12,7 @@ import gpytorch
 from gpytorch.constraints import GreaterThan
 
 from bbo.algorithms.base import Designer
-from bbo.algorithms.random import RandomDesigner
+from bbo.algorithms.sampling.random import RandomDesigner
 from bbo.utils.converters.converter import SpecType, DefaultTrialConverter
 from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.problem_statement import ProblemStatement, Objective
@@ -21,6 +21,7 @@ from bbo.algorithms.bo_utils.mean_factory import mean_factory
 from bbo.algorithms.bo_utils.kernel_factory import kernel_factory
 from bbo.algorithms.bo_utils.acqf_factory import acqf_factory
 from bbo.algorithms.evolution.nsgaii import NSGAIIDesigner
+from bbo.algorithms.evolution.regularized_evolution import RegularizedEvolutionDesigner
 from bbo.benchmarks.experimenters.torch_experimenter import TorchExperimenter
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,7 @@ class BODesigner(Designer):
     )
     _acqf_optimizer: str = field(
         default='l-bfgs', kw_only=True,
-        validator=validators.in_(['l-bfgs', 'nsgaii'])
+        validator=validators.in_(['l-bfgs', 'nsgaii', 're'])
     )
     _acqf_config: dict = field(factory=dict, kw_only=True)
 
@@ -184,6 +185,26 @@ class BODesigner(Designer):
                         random_X.append(features[name])
                     next_X.append(np.hstack(random_X))
                 next_X = torch.from_numpy(np.vstack(next_X))
+        elif self._acqf_optimizer == 're':
+            sp = self._problem_statement.search_space
+            obj = Objective()
+            obj.add_metric(self._acqf_type, ObjectiveMetricGoal.MAXIMIZE)
+            re_problem_statement = ProblemStatement(sp, obj)
+            re_designer = RegularizedEvolutionDesigner(re_problem_statement)
+            experimenter = TorchExperimenter(
+                lambda x: acqf(x.unsqueeze(1)).unsqueeze(-1), 
+                re_problem_statement
+            )
+            for _ in range(self._acqf_config.get('epochs', 200)):
+                trials = re_designer.suggest()
+                experimenter.evaluate(trials)
+                re_designer.update(trials)
+            best_trials = re_designer.result()
+            features = self._converter.to_features(best_trials)
+            next_X = []
+            for name in self._converter.input_converter_dict:
+                next_X.append(features[name])
+            next_X = torch.from_numpy(np.hstack(next_X))
         else:
             raise NotImplementedError
 
