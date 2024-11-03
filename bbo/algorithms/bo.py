@@ -243,7 +243,10 @@ class BODesigner(Designer):
             train_X = torch.cat(train_X, dim=-1).to(self._device)
 
             train_Y = []
-            for _, v in labels.items():
+            metric_informations = self._problem_statement.objective.metric_informations
+            for v, metric_info in zip(labels.values(), metric_informations.values()):
+                if metric_info.goal == ObjectiveMetricGoal.MINIMIZE:
+                    v = -v
                 train_Y.append(v)
             train_Y = np.concatenate(train_Y, axis=-1)
             if train_Y.shape[-1] > 1:

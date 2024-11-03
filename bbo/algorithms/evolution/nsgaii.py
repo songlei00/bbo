@@ -91,7 +91,7 @@ class NSGAIIDesigner(Designer):
     def _convertF2labels(self, F):
         labels = dict()
         metric_informations = self._problem_statement.objective.metric_informations
-        for i, name in enumerate(metric_informations):
+        for i, name in enumerate(metric_informations.values()):
             flag = 1
             if metric_informations[name].goal == ObjectiveMetricGoal.MAXIMIZE:
                 flag = -1
