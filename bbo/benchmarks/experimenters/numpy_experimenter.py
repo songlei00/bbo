@@ -18,9 +18,7 @@ class NumpyExperimenter(BaseExperimenter):
         self._impl = impl
         self._problem_statement = problem_statement
 
-        self._converter = ArrayTrialConverter.from_problem(
-            problem_statement, scale=False, onehot_embed=False,
-        )
+        self._converter = ArrayTrialConverter.from_problem(problem_statement, scale=False)
 
     def evaluate(self, suggestions: List[Trial]):
         features = self._converter.to_features(suggestions)

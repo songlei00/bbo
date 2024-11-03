@@ -1,7 +1,7 @@
 import logging
 from typing import List, Sequence, Optional, Union
 
-from attrs import define, field, validators
+from attrs import define, field, validators, evolve
 import numpy as np
 import torch
 from torch import optim
@@ -13,7 +13,8 @@ from gpytorch.constraints import GreaterThan
 
 from bbo.algorithms.base import Designer
 from bbo.algorithms.sampling.random import RandomDesigner
-from bbo.utils.converters.converter import SpecType, DefaultTrialConverter
+from bbo.utils.converters.converter import SpecType
+from bbo.utils.converters.torch_converter import GroupedFeatureTrialConverter
 from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.problem_statement import ProblemStatement, Objective
 from bbo.utils.trial import Trial
@@ -61,7 +62,9 @@ class BODesigner(Designer):
         default='qEI', kw_only=True,
         validator=validators.or_(
             validators.in_(['qEI', 'qUCB', 'qPI', 'qlogEI']),
-            validators.deep_iterable(validators.in_(['qEI', 'qUCB', 'qPI', 'qlogEI'])),
+            validators.deep_iterable(
+                validators.in_(['qEI', 'qUCB', 'qPI', 'qlogEI'])
+            ),
         )
     )
     _acqf_optimizer: str = field(
@@ -75,12 +78,9 @@ class BODesigner(Designer):
 
     def __attrs_post_init__(self):
         self._init_designer = RandomDesigner(self._problem_statement)
-        self._converter = DefaultTrialConverter.from_problem(self._problem_statement, merge_by_type=True)
+        self._converter = GroupedFeatureTrialConverter.from_problem(self._problem_statement)
 
-        type2bounds = {
-            SpecType.DOUBLE: {'lb': [], 'ub': []},
-            SpecType.CATEGORICAL: {'lb': [], 'ub': []}
-        }
+        type2bounds = {k: {'lb': [], 'ub': []} for k in SpecType}
         for spec in self._converter.output_spec.values():
             if spec.type in type2bounds:
                 type2bounds[spec.type]['lb'].append(spec.bounds[0])
@@ -90,10 +90,12 @@ class BODesigner(Designer):
         for k in type2bounds:
             type2bounds[k]['lb'] = torch.tensor(type2bounds[k]['lb'])
             type2bounds[k]['ub'] = torch.tensor(type2bounds[k]['ub'])
-            
-        self._kernel_config['type2num'] = dict()
+        self._type2bounds = type2bounds
+
+        self._type2num = dict()
         for k in type2bounds:
-            self._kernel_config['type2num'][k] = len(type2bounds[k]['lb'])
+            self._type2num[k] = len(type2bounds[k]['lb'])
+        self._kernel_config['type2num'] = self._type2num
         
         self._device = torch.device(self._device if torch.cuda.is_available() else 'cpu')
 
@@ -140,12 +142,22 @@ class BODesigner(Designer):
             
         return acqf
     
-    def optimize_acqf(self, acqf):
+    def optimize_acqf(self, acqf) -> Sequence[Trial]:
         if self._acqf_optimizer == 'l-bfgs':
-            bounds = torch.vstack((self._lb, self._ub)).double().to(self._device)
-            next_X, _ = botorch.optim.optimize.optimize_acqf(
+            lb = torch.cat([bounds['lb'] for bounds in self._type2bounds.values()])
+            ub = torch.cat([bounds['ub'] for bounds in self._type2bounds.values()])
+            bounds = torch.vstack((lb, ub)).double().to(self._device)
+            next_X_tensor, _ = botorch.optim.optimize.optimize_acqf(
                 acqf, bounds=bounds, q=self._q, num_restarts=10, raw_samples=1024
             )
+            grouped_features = dict()
+            start_idx = 0
+            for k, d in self._type2num.items():
+                X = next_X_tensor[:, start_idx: start_idx+d]
+                X = X.to('cpu').numpy()
+                grouped_features[k.name] = X
+                start_idx += d
+            next_X = self._converter.to_trials(grouped_features)
         elif self._acqf_optimizer == 'nsgaii':
             sp = self._problem_statement.search_space
             obj = Objective()
@@ -163,6 +175,8 @@ class BODesigner(Designer):
                 n_offsprings=self._acqf_config.get('n_offsprings', None),
             )
             def acqf_obj(x, acqf):
+                if not isinstance(acqf, (tuple, list)):
+                    acqf = [acqf]
                 y = []
                 for acqf_tmp in acqf:
                     y.append(acqf_tmp(x.unsqueeze(1)).unsqueeze(-1))
@@ -175,29 +189,26 @@ class BODesigner(Designer):
                 nsgaii_designer.update(trials)
 
             # generate next_X for batch BO setting
-            pareto_X, _ = nsgaii_designer.result()
-            pop_X, _ = nsgaii_designer.curr_pop()
-            diff_X = [x for x in pop_X if x not in pareto_X]
-            diff_X = np.zeros((0, pareto_X.shape[-1])) if len(diff_X) == 0 else np.vstack(diff_X)
+            pareto_trials = nsgaii_designer.result()
+            pareto_trials = [evolve(i, metrics=None) for i in pareto_trials]
+            pop_trials = nsgaii_designer.curr_pop()
+            pop_trials = [evolve(i, metrics=None) for i in pop_trials]
+            diff_trials = [x for x in pop_trials if x not in pareto_trials]
+            next_X = []
 
-            if len(pareto_X) >= self._q:
-                idx = np.random.choice(len(pareto_X), self._q, replace=False)
-                next_X = torch.from_numpy(pareto_X[idx])
+            if len(pareto_trials) >= self._q:
+                idx = np.random.choice(len(pareto_trials), self._q, replace=False)
+                next_X.extend([pareto_trials[i] for i in idx])
             else:
-                next_X = [pareto_X]
-                if len(diff_X) > 0:
-                    quota = min(len(diff_X), self._q-len(pareto_X))
-                    idx = np.random.choice(len(diff_X), quota, replace=False)
-                    next_X.append(diff_X[idx])
+                next_X.extend(pareto_trials)
+                if len(diff_trials) > 0:
+                    quota = min(len(diff_trials), self._q-len(pareto_trials))
+                    idx = np.random.choice(len(diff_trials), quota, replace=False)
+                    next_X.extend([diff_trials[i] for i in idx])
                 quota = self._q - np.vstack(next_X).shape[0]
                 if quota > 0:
                     trials = self._init_designer.suggest(quota)
-                    features = self._converter.to_features(trials)
-                    random_X = []
-                    for name in self._converter.input_converter_dict:
-                        random_X.append(features[name])
-                    next_X.append(np.hstack(random_X))
-                next_X = torch.from_numpy(np.vstack(next_X))
+                    next_X.extend(trials)
         elif self._acqf_optimizer == 're':
             sp = self._problem_statement.search_space
             obj = Objective()
@@ -213,11 +224,7 @@ class BODesigner(Designer):
                 experimenter.evaluate(trials)
                 re_designer.update(trials)
             best_trials = re_designer.result()
-            features = self._converter.to_features(best_trials)
-            next_X = []
-            for name in self._converter.input_converter_dict:
-                next_X.append(features[name])
-            next_X = torch.from_numpy(np.hstack(next_X))
+            next_X = best_trials
         else:
             raise NotImplementedError
 
@@ -225,15 +232,14 @@ class BODesigner(Designer):
 
     def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         if len(self._trials) < self._n_init:
-            ret = self._init_designer.suggest(count)
+            next_X = self._init_designer.suggest(count)
         else:
             count = count or 1
             features, labels = self._converter.convert(self._trials)
 
             train_X = []
-            for k in features:
-                features[k] = torch.from_numpy(features[k]).to(self._device)
-                train_X.append(features[k])
+            for k in SpecType:
+                train_X.append(torch.from_numpy(features[k.name]).to(self._device))
             train_X = torch.cat(train_X, dim=-1).to(self._device)
 
             train_Y = []
@@ -250,17 +256,7 @@ class BODesigner(Designer):
             acqf = self.create_acqf(model, train_X, train_Y)
             next_X = self.optimize_acqf(acqf)
 
-            double_next_X, cat_next_X, rest_next_X = torch.tensor_split(
-                next_X, (self._kernel_config['type2num'][SpecType.DOUBLE], self._kernel_config['type2num'][SpecType.DOUBLE]+self._kernel_config['type2num'][SpecType.CATEGORICAL]), dim=-1
-            )
-            assert rest_next_X.shape[-1] == 0
-            features = {
-                SpecType.DOUBLE: double_next_X.to('cpu').numpy(),
-                SpecType.CATEGORICAL: cat_next_X.to('cpu').numpy()
-            }
-            ret = self._converter.to_trials(features)
-
-        return ret
+        return next_X
 
     def update(self, completed: Sequence[Trial]) -> None:
         self._trials.extend(completed)

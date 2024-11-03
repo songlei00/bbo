@@ -32,7 +32,6 @@ class MixedKernel(Kernel):
         self.num_cat = num_cat
         self.mix_mode = mix_mode
         self.transform = nn.Softplus()
-        self.add_weight = nn.Parameter(torch.ones(1)*0.5)
         self.mix_weight = nn.Parameter(torch.ones(1)*0.5)
 
     def forward(self, x1, x2, **params):
@@ -56,15 +55,13 @@ class MixedKernel(Kernel):
 
         # mix different kernel matrix
         if self.mix_mode == 'add':
-            add_weight = self.transform(self.add_weight)
-            K = (1 - add_weight) * type2K[SpecType.DOUBLE] + add_weight * type2K[SpecType.CATEGORICAL]
+            K = type2K[SpecType.DOUBLE] + type2K[SpecType.CATEGORICAL]
             return K
         elif self.mix_mode == 'mul':
             K = type2K[SpecType.DOUBLE] * type2K[SpecType.CATEGORICAL]
             return K
         elif self.mix_mode == 'both':
-            add_weight = self.transform(self.add_weight)
-            add_K = (1 - add_weight) * type2K[SpecType.DOUBLE] + add_weight * type2K[SpecType.CATEGORICAL]
+            add_K = type2K[SpecType.DOUBLE] + type2K[SpecType.CATEGORICAL]
             mul_K = type2K[SpecType.DOUBLE] * type2K[SpecType.CATEGORICAL]
             mix_weight = self.transform(self.mix_weight)
             K = (1 - mix_weight) * add_K + mix_weight * mul_K

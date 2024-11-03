@@ -14,7 +14,7 @@ from pymoo.core.evaluator import Evaluator
 from bbo.algorithms.base import Designer
 from bbo.utils.converters.converter import DefaultTrialConverter
 from bbo.utils.problem_statement import ProblemStatement
-from bbo.utils.trial import Trial
+from bbo.utils.trial import Trial, MetricDict
 from bbo.utils.metric_config import ObjectiveMetricGoal
 
 
@@ -72,10 +72,37 @@ class NSGAIIDesigner(Designer):
         Evaluator().eval(static, self._last_pop)
         self._impl.tell(infills=self._last_pop)
 
-    def result(self):
+    def result(self) -> Sequence[Trial]:
         res = self._impl.result()
-        return np.atleast_2d(res.X), np.atleast_2d(res.F)
+        X, F = np.atleast_2d(res.X), np.atleast_2d(res.F)
+        return self._convert_pop2trials(X, F)
     
-    def curr_pop(self):
+    def curr_pop(self) -> Sequence[Trial]:
         pop = self._impl.pop
-        return pop.get('X'), pop.get('F')
+        X, F = np.atleast_2d(pop.get('X')), np.atleast_2d(pop.get('F'))
+        return self._convert_pop2trials(X, F)
+    
+    def _convertX2features(self, X):
+        features = dict()
+        for i, name in enumerate(self._converter.input_converter_dict):
+            features[name] = X[:, i]
+        return features
+
+    def _convertF2labels(self, F):
+        labels = dict()
+        metric_informations = self._problem_statement.objective.metric_informations
+        for i, name in enumerate(metric_informations):
+            flag = 1
+            if metric_informations[name].goal == ObjectiveMetricGoal.MAXIMIZE:
+                flag = -1
+            labels[name] = flag * F[:, i]
+        return labels
+    
+    def _convert_pop2trials(self, X, F):
+        features = self._convertX2features(X)
+        trials = self._converter.to_trials(features)
+        labels = self._convertF2labels(F)
+        metrics = self._converter.to_metrics(labels)
+        for trial, m in zip(trials, metrics):
+            trial.complete(m)
+        return trials

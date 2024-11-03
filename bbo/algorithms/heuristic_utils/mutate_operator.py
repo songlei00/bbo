@@ -2,7 +2,7 @@ import numpy as np
 
 from bbo.algorithms.heuristic_utils.base_operator import MutationOperator
 from bbo.utils.converters.converter import (
-    NumpyArraySpec,
+    FeatureSpec,
     SpecType,
 )
 
@@ -11,7 +11,7 @@ class RandomMutation(MutationOperator):
     def __call__(
         self,
         curr_val: np.ndarray,
-        spec: NumpyArraySpec,
+        spec: FeatureSpec,
     ) -> np.ndarray:
         lb, ub = spec.bounds
         shape = (1, 1)
@@ -32,7 +32,7 @@ class PerturbMutation(MutationOperator):
     def __call__(
         self,
         curr_val: np.ndarray,
-        spec: NumpyArraySpec
+        spec: FeatureSpec
     ) -> np.ndarray:
         lb, ub = spec.bounds
         shape = (1, 1)

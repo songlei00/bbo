@@ -4,7 +4,7 @@ from torch import Tensor
 
 from bbo.benchmarks.experimenters.base import BaseExperimenter
 from bbo.utils.problem_statement import ProblemStatement
-from bbo.utils.converters.torch_converter import TorchTrialConverter
+from bbo.utils.converters.torch_converter import TorchArrayTrialConverter
 from bbo.utils.trial import Trial
 
 
@@ -18,9 +18,7 @@ class TorchExperimenter(BaseExperimenter):
         self._impl = impl
         self._problem_statement = problem_statement
 
-        self._converter = TorchTrialConverter.from_problem(
-            problem_statement, scale=False, onehot_embed=False,
-        )
+        self._converter = TorchArrayTrialConverter.from_problem(problem_statement, scale=False)
 
     def evaluate(self, suggestions: List[Trial]):
         features = self._converter.to_features(suggestions)
