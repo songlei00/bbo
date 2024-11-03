@@ -1,10 +1,12 @@
 from abc import ABCMeta, abstractmethod
-from typing import Sequence, List
+from typing import Sequence, List, Tuple, Dict, TypeVar
 
 import numpy as np
 
 from bbo.utils.metric_config import MetricInformation
 from bbo.utils.trial import ParameterValue, Metric, ParameterDict, MetricDict, Trial
+
+_T = TypeVar('_T')
 
 
 class BaseInputConverter(metaclass=ABCMeta):
@@ -50,9 +52,11 @@ class BaseOutputConverter(metaclass=ABCMeta):
 
 
 class BaseTrialConverter(metaclass=ABCMeta):
-    @abstractmethod
-    def convert(self, trials: Sequence[Trial]):
-        pass
+    def convert(
+        self, trials: Sequence[Trial]
+    ) -> Tuple[Dict[str, _T], Dict[str, _T]]:
+        features, labels = self.to_features(trials), self.to_labels(trials)
+        return features, labels
 
     @abstractmethod
     def to_features(self, trials: Sequence[Trial]):
@@ -62,9 +66,20 @@ class BaseTrialConverter(metaclass=ABCMeta):
     def to_labels(self, trials: Sequence[Trial]):
         pass
 
-    @abstractmethod
-    def to_trials(self, features, labels) -> Sequence[ParameterDict]:
-        pass
+    def to_trials(
+        self,
+        features: Dict[str, _T],
+        labels: Dict[str, _T] = None
+    ) -> Sequence[Trial]:
+        trials = []
+        parameters = self.to_parameters(features)
+        if labels is not None:
+            metrics = self.to_metrics(labels)
+        else:
+            metrics = [None for _ in range(len(parameters))]
+        for p, m in zip(parameters, metrics):
+            trials.append(Trial(parameters=p, metrics=m))
+        return trials
 
     @abstractmethod
     def to_parameters(self, features) -> Sequence[Trial]:
