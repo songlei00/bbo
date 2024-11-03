@@ -203,7 +203,7 @@ class DefaultInputConverter(BaseInputConverter):
         ):
             if not np.all(np.isclose(values, values.astype(int))):
                 logger.warning('Float values are round to integer')
-            return [ParameterValue(self._pc.feasible_values[int(v)]) for v in values]
+            return [ParameterValue(self._pc.feasible_values[round(v)]) for v in values]
 
     @property
     def output_spec(self):
@@ -394,13 +394,10 @@ class ArrayTrialConverter(BaseTrialConverter):
         cls,
         problem: ProblemStatement,
         *,
-        scale: bool = True,
-        onehot_embed: bool = False,
+        scale: bool = True
     ):
         converter = cls([], [])
-        converter._impl = DefaultTrialConverter.from_problem(
-            problem, scale=scale, onehot_embed=onehot_embed
-        )
+        converter._impl = DefaultTrialConverter.from_problem(problem, scale=scale)
         return converter
 
     def to_features(self, trials: Sequence[Trial]) -> np.ndarray:
