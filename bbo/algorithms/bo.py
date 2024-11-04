@@ -263,3 +263,10 @@ class BODesigner(Designer):
 
     def update(self, completed: Sequence[Trial]) -> None:
         self._trials.extend(completed)
+
+    @property
+    def history(self) -> Sequence[Trial]:
+        return self._trials
+    
+    def set_history(self, trials: Sequence[Trial]):
+        self._trials = trials
