@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List
 
 import numpy as np
 from attrs import define, field, validators
@@ -22,6 +22,9 @@ class LocalSearchDesigner(Designer):
         validator=validators.instance_of(MutationOperator),
     )
 
+    # internal attributes
+    _trials: List[Trial] = field(factory=list, init=False)
+
     def __attrs_post_init__(self):
         self._init_designer = RandomDesigner(self._problem_statement)
         self._converter = DefaultTrialConverter.from_problem(self._problem_statement)
@@ -36,6 +39,7 @@ class LocalSearchDesigner(Designer):
         return ret
 
     def update(self, completed: Sequence[Trial]) -> None:
+        self._trials.extend(completed)
         for suggestion in completed:
             if self._best_suggestion is None or is_better_than(
                 self._problem_statement.objective,
@@ -55,3 +59,7 @@ class LocalSearchDesigner(Designer):
             new_v = self._mutate_operator(sample[key], spec)
             sample[key] = new_v
         return self._converter.to_trials(sample)[0]
+
+    @property
+    def history(self):
+        return self._trials

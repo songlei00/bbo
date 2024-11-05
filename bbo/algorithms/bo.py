@@ -59,7 +59,7 @@ class BODesigner(Designer):
 
     # acquisition function configuration
     _acqf_type: Union[str, List[str]] = field(
-        default='qEI', kw_only=True,
+        default='qlogEI', kw_only=True,
         validator=validators.or_(
             validators.in_(['qEI', 'qUCB', 'qPI', 'qlogEI']),
             validators.deep_iterable(
@@ -102,10 +102,10 @@ class BODesigner(Designer):
     def create_model(self, train_X, train_Y):
         mean_module = mean_factory(self._mean_type, self._mean_config)
         covar_module = kernel_factory(self._kernel_type, self._kernel_config)
-        logger.info('='*20)
-        logger.info('mean_module: {}'.format(mean_module))
-        logger.info('covar_module: {}'.format(covar_module))
-        logger.info('='*20)
+        # logger.info('='*20)
+        # logger.info('mean_module: {}'.format(mean_module))
+        # logger.info('covar_module: {}'.format(covar_module))
+        # logger.info('='*20)
         model = SingleTaskGP(train_X, train_Y, covar_module=covar_module, mean_module=mean_module)
         model.likelihood.noise_covar.register_constraint('raw_noise', GreaterThan(1e-4))
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
@@ -150,11 +150,11 @@ class BODesigner(Designer):
             next_X_tensor, _ = botorch.optim.optimize.optimize_acqf(
                 acqf, bounds=bounds, q=self._q, num_restarts=10, raw_samples=1024
             )
+            next_X_np = next_X_tensor.detach().to('cpu').numpy()
             grouped_features = dict()
             start_idx = 0
             for k, d in self._type2num.items():
-                X = next_X_tensor[:, start_idx: start_idx+d]
-                X = X.to('cpu').numpy()
+                X = next_X_np[:, start_idx: start_idx+d]
                 grouped_features[k.name] = X
                 start_idx += d
             next_X = self._converter.to_trials(grouped_features)
