@@ -106,10 +106,9 @@ class BODesigner(Designer):
         # logger.info('mean_module: {}'.format(mean_module))
         # logger.info('covar_module: {}'.format(covar_module))
         # logger.info('='*20)
-        model = SingleTaskGP(train_X, train_Y, covar_module=covar_module, mean_module=mean_module)
+        model = SingleTaskGP(train_X, train_Y, covar_module=covar_module, mean_module=mean_module).to(self._device)
         model.likelihood.noise_covar.register_constraint('raw_noise', GreaterThan(1e-4))
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
-        model, mll = model.to(self._device), mll.to(self._device)
 
         return mll, model
 
@@ -179,7 +178,7 @@ class BODesigner(Designer):
                     acqf = [acqf]
                 y = []
                 for acqf_tmp in acqf:
-                    y.append(acqf_tmp(x.unsqueeze(1)).unsqueeze(-1))
+                    y.append(acqf_tmp(x.unsqueeze(1).to(self._device)).unsqueeze(-1))
                 y = torch.hstack(y)
                 return y
             experimenter = TorchExperimenter(lambda x: acqf_obj(x, acqf), nsgaii_problem_statement)
@@ -216,7 +215,7 @@ class BODesigner(Designer):
             re_problem_statement = ProblemStatement(sp, obj)
             re_designer = RegularizedEvolutionDesigner(re_problem_statement)
             experimenter = TorchExperimenter(
-                lambda x: acqf(x.unsqueeze(1)).unsqueeze(-1), 
+                lambda x: acqf(x.unsqueeze(1).to(self._device)).unsqueeze(-1), 
                 re_problem_statement
             )
             for _ in range(self._acqf_config.get('epochs', 200)):
@@ -239,7 +238,7 @@ class BODesigner(Designer):
 
             train_X = []
             for k in SpecType:
-                train_X.append(torch.from_numpy(features[k.name]).to(self._device))
+                train_X.append(torch.from_numpy(features[k.name]))
             train_X = torch.cat(train_X, dim=-1).to(self._device)
 
             train_Y = []

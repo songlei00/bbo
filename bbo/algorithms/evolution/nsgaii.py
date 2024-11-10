@@ -91,11 +91,11 @@ class NSGAIIDesigner(Designer):
     def _convertF2labels(self, F):
         labels = dict()
         metric_informations = self._problem_statement.objective.metric_informations
-        for i, name in enumerate(metric_informations.values()):
+        for i, metric_info in enumerate(metric_informations.values()):
             flag = 1
-            if metric_informations[name].goal == ObjectiveMetricGoal.MAXIMIZE:
+            if metric_info.goal == ObjectiveMetricGoal.MAXIMIZE:
                 flag = -1
-            labels[name] = flag * F[:, i]
+            labels[metric_info.name] = flag * F[:, i]
         return labels
     
     def _convert_pop2trials(self, X, F):
