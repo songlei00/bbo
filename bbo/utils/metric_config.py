@@ -91,6 +91,11 @@ class Objective:
     @property
     def metric_informations(self):
         return self._metric_informations
+    
+    def item(self) -> MetricInformation:
+        if len(self._metric_informations) > 1:
+            raise NotImplementedError('Unsupported for multi objective')
+        return self.metrics[0]
 
     def num_metrics(self, goal: Optional[ObjectiveMetricGoal]=None):
         if goal is None:

@@ -1,6 +1,7 @@
 import copy
+import heapq
 from datetime import datetime
-from typing import Union, Optional
+from typing import Union, Optional, Sequence
 from collections import UserDict
 
 from attrs import define, field, validators
@@ -130,3 +131,18 @@ def is_better_than(
         raise NotImplementedError('Unsupported for multi objective')
     else:
         return is_better[0]
+    
+
+def topk_trials(objective: Objective, trials: Sequence[Trial], k: int):
+    h = []
+    flag = 1 if (objective.item().goal == ObjectiveMetricGoal.MAXIMIZE) else -1
+    obj_name = objective.item().name
+    for i, trial in enumerate(trials):
+        v = flag * trial.metrics[obj_name].value
+        if len(h) < k:
+            heapq.heappush(h, (v, (trial, i)))
+        elif is_better_than(objective, trial, h[0][1][0]):
+            heapq.heappop(h)
+            heapq.heappush(h, (v, (trial, i)))
+    h = list(i[1][0] for i in sorted(h, key=lambda x: x[1][1]))
+    return h
