@@ -5,6 +5,7 @@ from attrs import define, field, validators, evolve
 import numpy as np
 import torch
 from torch import optim
+
 import botorch
 from botorch import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
@@ -13,7 +14,7 @@ from gpytorch.constraints import GreaterThan
 
 from bbo.algorithms.base import Designer
 from bbo.algorithms.sampling.random import RandomDesigner
-from bbo.utils.converters.converter import SpecType
+from bbo.utils.converters.converter import SpecType, BaseTrialConverter
 from bbo.utils.converters.torch_converter import GroupedFeatureTrialConverter
 from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.problem_statement import ProblemStatement, Objective
@@ -72,9 +73,11 @@ class BODesigner(Designer):
         validator=validators.in_(['l-bfgs', 'nsgaii', 're'])
     )
     _acqf_config: dict = field(factory=dict, kw_only=True)
-
-    # internal attributes
-    _trials: List[Trial] = field(factory=list, init=False)
+    
+    _init_designer: Designer = field(init=False)
+    _converter: BaseTrialConverter = field(init=False)
+    _type2bounds = field(init=False)
+    _type2num = field(init=False)
 
     def __attrs_post_init__(self):
         self._init_designer = RandomDesigner(self._problem_statement)
@@ -96,7 +99,7 @@ class BODesigner(Designer):
         for k in type2bounds:
             self._type2num[k] = len(type2bounds[k]['lb'])
         self._kernel_config['type2num'] = self._type2num
-        
+
         self._device = torch.device(self._device if torch.cuda.is_available() else 'cpu')
 
     def create_model(self, train_X, train_Y):
@@ -229,7 +232,7 @@ class BODesigner(Designer):
 
         return next_X
 
-    def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
+    def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         if len(self._trials) < self._n_init:
             next_X = self._init_designer.suggest(count)
         else:
@@ -260,12 +263,8 @@ class BODesigner(Designer):
 
         return next_X
 
-    def update(self, completed: Sequence[Trial]) -> None:
-        self._trials.extend(completed)
+    def _update(self, completed: Sequence[Trial]) -> None:
+        pass
 
-    @property
-    def history(self) -> Sequence[Trial]:
-        return self._trials
-    
-    def set_history(self, trials: Sequence[Trial]):
-        self._trials = trials
+    def _reset(self, trials: Sequence[Trial]=None):
+        pass

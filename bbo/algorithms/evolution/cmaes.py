@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List
 from attrs import define, field, validators
 
 import cma
@@ -8,7 +8,7 @@ import numpy as np
 from bbo.algorithms.base import Designer
 from bbo.algorithms.sampling.random import RandomDesigner
 from bbo.utils.problem_statement import ProblemStatement
-from bbo.utils.converters.converter import ArrayTrialConverter
+from bbo.utils.converters.converter import ArrayTrialConverter, BaseTrialConverter
 from bbo.utils.parameter_config import ParameterType
 from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.trial import Trial
@@ -34,6 +34,12 @@ class CMAESDesigner(Designer):
         validator=validators.optional(validators.instance_of(int)),
     )
 
+    _is_flip = field(init=False)
+    _init_designer: Designer = field(init=False)
+    _converter: BaseTrialConverter = field(init=False)
+    _cmaes = field(init=False)
+    _curr_trials = field(init=False)
+
     def __attrs_post_init__(self):
         if not all([
             pc.type == ParameterType.DOUBLE
@@ -45,7 +51,9 @@ class CMAESDesigner(Designer):
                          ObjectiveMetricGoal.MAXIMIZE)
         self._init_designer = RandomDesigner(self._problem_statement)
         self._converter = ArrayTrialConverter.from_problem(self._problem_statement)
+        self._init_cmaes()
 
+    def _init_cmaes(self):
         trial0 = self._init_designer.suggest(count=1)
         x0 = self._converter.to_features(trial0)[0]
         lb, ub = [], []
@@ -61,7 +69,7 @@ class CMAESDesigner(Designer):
         )
         self._curr_trials = deque(maxlen=self._config.population_size)
 
-    def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
+    def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         count = count or 1
         if count != 1:
             raise ValueError('CMAES can only suggest one suggestion now')
@@ -70,7 +78,9 @@ class CMAESDesigner(Designer):
         
         return self._converter.to_trials(pop)
 
-    def update(self, completed: Sequence[Trial]) -> None:
+    def _update(self, completed: Sequence[Trial]) -> None:
+        self._trials.extend(completed)
+        self._epoch += 1
         while completed:
             self._curr_trials.append(completed.pop())
             
@@ -81,3 +91,7 @@ class CMAESDesigner(Designer):
                 labels = [v.item() for v in labels]
                 self._cmaes.tell(features, labels)
                 self._curr_trials.clear()
+
+    def _reset(self, trials: Sequence[Trial]=None):
+        self._init_cmaes()
+        self.update(trials)

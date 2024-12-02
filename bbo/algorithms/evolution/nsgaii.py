@@ -12,7 +12,7 @@ from pymoo.problems.static import StaticProblem
 from pymoo.core.evaluator import Evaluator
 
 from bbo.algorithms.base import Designer
-from bbo.utils.converters.converter import DefaultTrialConverter
+from bbo.utils.converters.converter import DefaultTrialConverter, BaseTrialConverter
 from bbo.utils.problem_statement import ProblemStatement
 from bbo.utils.trial import Trial, MetricDict
 from bbo.utils.metric_config import ObjectiveMetricGoal
@@ -26,11 +26,16 @@ class NSGAIIDesigner(Designer):
     _pop_size: int = field(default=20)
     _n_offsprings: Optional[int] = field(default=None)
 
-    # internal attributes
     _last_pop = field(default=None, init=False)
+    _converter: BaseTrialConverter = field(init=False)
+    _impl = field(init=False)
+    _nsga_problem = field(init=False)
 
     def __attrs_post_init__(self):
         self._converter = DefaultTrialConverter.from_problem(self._problem_statement)
+        self._init_nsga()
+
+    def _init_nsga(self):
         self._impl = pymoo_NSGA2(
             pop_size=self._pop_size,
             n_offsprings=self._n_offsprings or self._pop_size,
@@ -49,7 +54,7 @@ class NSGAIIDesigner(Designer):
         termination = NoTermination()
         self._impl.setup(self._nsga_problem, termination=termination)
 
-    def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
+    def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         pop = self._impl.ask()
         X = pop.get('X')
         features = dict()
@@ -59,7 +64,7 @@ class NSGAIIDesigner(Designer):
         self._last_pop = pop
         return trials
 
-    def update(self, completed: Sequence[Trial]) -> None:
+    def _update(self, completed: Sequence[Trial]) -> None:
         labels = self._converter.to_labels(completed)
         F = []
         metric_informations = self._problem_statement.objective.metric_informations
@@ -71,6 +76,10 @@ class NSGAIIDesigner(Designer):
         static = StaticProblem(self._nsga_problem, F=F)
         Evaluator().eval(static, self._last_pop)
         self._impl.tell(infills=self._last_pop)
+
+    def _reset(self, trials: Sequence[Trial]=None):
+        self._init_nsga()
+        self.update(trials)
 
     def result(self) -> Sequence[Trial]:
         res = self._impl.result()

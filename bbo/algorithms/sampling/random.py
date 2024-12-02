@@ -4,7 +4,7 @@ import numpy as np
 from attrs import define, field, validators
 
 from bbo.algorithms.base import Designer
-from bbo.utils.converters.converter import SpecType, DefaultTrialConverter
+from bbo.utils.converters.converter import SpecType, BaseTrialConverter, DefaultTrialConverter
 from bbo.utils.problem_statement import ProblemStatement
 from bbo.utils.trial import Trial
 
@@ -18,12 +18,13 @@ class RandomDesigner(Designer):
         default=None,
         validator=validators.optional(validators.instance_of(int)),
     ) # TODO: use seed to control the behavior
+    _converter: BaseTrialConverter = field(init=False)
 
     def __attrs_post_init__(self):
         self._converter = DefaultTrialConverter.from_problem(self._problem_statement)
         # self._rng = np.random.RandomState(self._seed)
 
-    def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
+    def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         count = count or 1
         sample = dict()
         for name, spec in self._converter.output_spec.items():
@@ -41,6 +42,9 @@ class RandomDesigner(Designer):
 
         return self._converter.to_trials(sample)
 
-    def update(self, completed: Sequence[Trial]) -> None:
+    def _update(self, completed: Sequence[Trial]) -> None:
+        pass
+
+    def _reset(self, trials: Sequence[Trial]=None):
         pass
     

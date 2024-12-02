@@ -1,5 +1,5 @@
 import random
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Dict
 
 import numpy as np
 from attrs import define, field, validators
@@ -26,16 +26,17 @@ class GridSearchDesigner(Designer):
         kw_only=True,
     )
 
+    _current_idx: int = field(default=0, init=False)
+    _grid_values: Dict = field(factory=dict, init=False)
+
     def __attrs_post_init__(self):
-        self._current_idx = 0
-        self._grid_values = dict()
         for name, pc in self._problem_statement.search_space.parameter_configs.items():
             self._grid_values[name] = self._get_grid_from_parameter_config(pc)
         
         if self._shuffle:
             self._grid_values = self._shuffle_grid()
 
-    def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
+    def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         # Cartesian Product implementation from vizier
         count = count or 1
         parameter_dicts = []
@@ -52,8 +53,9 @@ class GridSearchDesigner(Designer):
         self._current_idx += count
         return [Trial(pd) for pd in parameter_dicts]
 
-    def update(self, completed: Sequence[Trial]) -> None:
-        pass
+    def _update(self, completed: Sequence[Trial]) -> None:
+        self._trials.extend(completed)
+        self._epoch += 1
 
     def _get_grid_from_parameter_config(
         self,
@@ -82,3 +84,8 @@ class GridSearchDesigner(Designer):
         for k in grid_values.keys():
             random.shuffle(grid_values[k])
         return grid_values
+    
+    def _reset(self, trials: Sequence[Trial]=None):
+        self._current_idx = 0
+        if self._shuffle:
+            self._grid_values = self._shuffle_grid()

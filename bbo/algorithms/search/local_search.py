@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, List
+from typing import Optional, Sequence
 
 import numpy as np
 from attrs import define, field, validators
@@ -8,7 +8,7 @@ from bbo.algorithms.sampling.random import RandomDesigner
 from bbo.algorithms.heuristic_utils.base_operator import MutationOperator
 from bbo.algorithms.heuristic_utils.mutate_operator import RandomMutation
 from bbo.utils.problem_statement import ProblemStatement
-from bbo.utils.converters.converter import DefaultTrialConverter
+from bbo.utils.converters.converter import DefaultTrialConverter, BaseTrialConverter
 from bbo.utils.trial import Trial, is_better_than
 
 
@@ -21,16 +21,16 @@ class LocalSearchDesigner(Designer):
         factory=RandomMutation,
         validator=validators.instance_of(MutationOperator),
     )
-
-    # internal attributes
-    _trials: List[Trial] = field(factory=list, init=False)
+    _init_designer: Designer = field(init=False)
+    _converter: BaseTrialConverter = field(init=False)
+    _best_suggestion: Trial = field(init=False)
 
     def __attrs_post_init__(self):
         self._init_designer = RandomDesigner(self._problem_statement)
         self._converter = DefaultTrialConverter.from_problem(self._problem_statement)
         self._best_suggestion = None
 
-    def suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
+    def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         if self._best_suggestion is None:
             ret = self._init_designer.suggest(count)
         else:
@@ -38,8 +38,9 @@ class LocalSearchDesigner(Designer):
             ret = [self._suggest_one() for _ in range(count)]
         return ret
 
-    def update(self, completed: Sequence[Trial]) -> None:
+    def _update(self, completed: Sequence[Trial]) -> None:
         self._trials.extend(completed)
+        self._epoch += 1
         for suggestion in completed:
             if self._best_suggestion is None or is_better_than(
                 self._problem_statement.objective,
@@ -60,6 +61,6 @@ class LocalSearchDesigner(Designer):
             sample[key] = new_v
         return self._converter.to_trials(sample)[0]
 
-    @property
-    def history(self):
-        return self._trials
+    def _reset(self, trials: Sequence[Trial]=None):
+        self._best_suggestion = None
+        self.update(trials)
