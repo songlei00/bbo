@@ -1,4 +1,4 @@
-attrs>=23.1.0
+attrs>=24.2
 cma>=3.3.0
 botorch>=0.12
 pymoo>=0.6
