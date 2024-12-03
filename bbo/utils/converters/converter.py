@@ -195,7 +195,7 @@ class DefaultInputConverter(BaseInputConverter):
         values = self.scaler.backward_fn(array)
         values = values.flatten()
         if self.spec.type == SpecType.DOUBLE:
-            return [ParameterValue(v) for v in values]
+            return [ParameterValue(float(v)) for v in values]
         elif self.spec.type in (
             SpecType.INTEGER,
             SpecType.CATEGORICAL,

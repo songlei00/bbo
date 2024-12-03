@@ -9,6 +9,7 @@ from torch import optim
 import botorch
 from botorch import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
+from botorch.optim.initializers import initialize_q_batch_nonneg
 import gpytorch
 from gpytorch.constraints import GreaterThan
 
@@ -70,7 +71,7 @@ class BODesigner(Designer):
     )
     _acqf_optimizer: str = field(
         default='l-bfgs', kw_only=True,
-        validator=validators.in_(['l-bfgs', 'nsgaii', 're'])
+        validator=validators.in_(['random', 'adam', 'l-bfgs', 'nsgaii', 're'])
     )
     _acqf_config: dict = field(factory=dict, kw_only=True)
     
@@ -145,14 +146,43 @@ class BODesigner(Designer):
         return acqf
     
     def optimize_acqf(self, acqf) -> Sequence[Trial]:
-        if self._acqf_optimizer == 'l-bfgs':
-            lb = torch.cat([bounds['lb'] for bounds in self._type2bounds.values()])
-            ub = torch.cat([bounds['ub'] for bounds in self._type2bounds.values()])
-            bounds = torch.vstack((lb, ub)).double().to(self._device)
-            next_X_tensor, _ = botorch.optim.optimize.optimize_acqf(
-                acqf, bounds=bounds, q=self._q, num_restarts=10, raw_samples=1024
-            )
-            next_X_np = next_X_tensor.detach().to('cpu').numpy()
+        if self._acqf_optimizer in ['random', 'adam', 'l-bfgs']:
+            num_restarts = 10
+            lb = torch.cat([bounds['lb'] for bounds in self._type2bounds.values()]).to(self._device)
+            ub = torch.cat([bounds['ub'] for bounds in self._type2bounds.values()]).to(self._device)
+            Xraw = lb + (ub - lb) * torch.rand(100*num_restarts, 1, len(lb)).to(self._device)
+            Yraw = acqf(Xraw)
+            cand_X = initialize_q_batch_nonneg(Xraw, Yraw, num_restarts)
+            cand_X.requires_grad_(True)
+
+            if self._acqf_optimizer == 'random':
+                pass
+            elif self._acqf_optimizer == 'adam':
+                optimizer = torch.optim.Adam([cand_X], lr=self._acqf_config.get('lr', 0.01))
+                for i in range(self._acqf_config.get('epochs', 200)):
+                    optimizer.zero_grad()
+                    loss = - acqf(cand_X).mean()
+                    loss.backward()
+                    optimizer.step()
+                    for j, (l, u) in enumerate(zip(lb, ub)):
+                        cand_X.data[..., j].clamp_(l, u)
+            elif self._acqf_optimizer == 'l-bfgs':
+                optimizer = torch.optim.LBFGS([cand_X], lr=self._acqf_config.get('lr', 0.01))
+                def closure():
+                    optimizer.zero_grad()
+                    loss = - acqf(cand_X).mean()
+                    loss.backward()
+                    return loss
+                for i in range(self._acqf_config.get('epochs', 50)):
+                    optimizer.step(closure)
+                    for j, (l, u) in enumerate(zip(lb, ub)):
+                        cand_X.data[..., j].clamp_(l, u)
+            else:
+                raise NotImplementedError('Unsupported acqf optimizer')
+
+            cand_Y = acqf(cand_X)
+            cand_X = cand_X[cand_Y.argmax()]
+            next_X_np = cand_X.detach().to('cpu').numpy()
             grouped_features = dict()
             start_idx = 0
             for k, d in self._type2num.items():
