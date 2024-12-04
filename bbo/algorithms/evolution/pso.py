@@ -54,6 +54,8 @@ class PSODesigner(Designer):
                         self._c1 * np.random.uniform(size=size) * (pbest_sample[name] - curr_sample[name]) + \
                         self._c2 * np.random.uniform(size=size) * (gbest_sample[name] - curr_sample[name])
                     sample[name] = curr_sample[name] + v
+                    lb, ub = spec.bounds
+                    sample[name] = np.clip(sample[name], lb, ub)
                 else:
                     raise NotImplementedError('Unsupported variable type')
             return self._converter.to_trials(sample)
