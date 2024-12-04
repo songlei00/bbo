@@ -1,3 +1,6 @@
+from typing import List, Dict
+
+from attrs import define, field, validators
 from gpytorch.kernels import ScaleKernel, MaternKernel
 from gpytorch.priors.torch_priors import GammaPrior
 from botorch.models.kernels import CategoricalKernel
@@ -12,30 +15,50 @@ from bbo.algorithms.bo_utils.kernels import MixedKernel
 from bbo.utils.converters.converter import SpecType
 
 
-def kernel_factory(kernel_type, kernel_config=None):
-    kernel_type = kernel_type or 'matern52'
+@define
+class KernelFactory:
+    _kernel_type: str = field(
+        default='matern52',
+        validator=validators.in_(['matern52', 'mlp', 'kumar', 'mixed'])
+    )
+    _hidden_features: List | None = field(
+        default=None,
+        validator=validators.optional(validators.instance_of(list)),
+        kw_only=True
+    )
+    _type2num: Dict | None = field(
+        default=None,
+        validator=validators.optional(
+            validators.deep_iterable(
+                validators.instance_of(SpecType),
+                validators.instance_of(int)
+            )
+        ),
+        kw_only=True
+    )
 
-    if kernel_type in ['matern52', 'mlp', 'kumar']:
-        if kernel_type == 'matern52':
-            wrapper = IdentityWrapper()
-        elif kernel_type == 'mlp':
-            wrapper = MLPWrapper(kernel_config['hidden_features'], activate_final=True)
-        elif kernel_type == 'kumar':
-            wrapper = KumarWrapper()
+    def __call__(self):
+        if self._kernel_type in ['matern52', 'mlp', 'kumar']:
+            if self._kernel_type == 'matern52':
+                wrapper = IdentityWrapper()
+            elif self._kernel_type == 'mlp':
+                wrapper = MLPWrapper(self._hidden_features, activate_final=True)
+            elif self._kernel_type == 'kumar':
+                wrapper = KumarWrapper()
+            else:
+                raise NotImplementedError('Unsupported kernel wrapper')
+            base_kernel = ScaleKernel(MaternKernel())
+            covar_module = WrapperKernel(base_kernel, wrapper)
+        elif self._kernel_type == 'mixed':
+            double_kernel = ScaleKernel(MaternKernel())
+            cat_kernel = CategoricalKernel()
+            covar_module = MixedKernel(
+                double_kernel, cat_kernel,
+                self._type2num[SpecType.DOUBLE],
+                self._type2num[SpecType.CATEGORICAL],
+                mix_mode='add'
+            )
         else:
-            raise NotImplementedError('Unsupported kernel wrapper')
-        base_kernel = ScaleKernel(MaternKernel())
-        covar_module = WrapperKernel(base_kernel, wrapper)
-    elif kernel_type == 'mixed':
-        double_kernel = ScaleKernel(MaternKernel())
-        cat_kernel = CategoricalKernel()
-        covar_module = MixedKernel(
-            double_kernel, cat_kernel,
-            kernel_config['type2num'][SpecType.DOUBLE],
-            kernel_config['type2num'][SpecType.CATEGORICAL],
-            mix_mode='add'
-        )
-    else:
-        raise NotImplementedError('Unsupported kernel type')
+            raise NotImplementedError('Unsupported kernel type')
 
-    return covar_module
+        return covar_module

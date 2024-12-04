@@ -21,8 +21,8 @@ from bbo.utils.converters.torch_converter import GroupedFeatureTrialConverter
 from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.problem_statement import ProblemStatement, Objective
 from bbo.utils.trial import Trial, is_better_than
-from bbo.algorithms.bo_utils.mean_factory import mean_factory
-from bbo.algorithms.bo_utils.kernel_factory import kernel_factory
+from bbo.algorithms.bo_utils.mean_factory import MeanFactory
+from bbo.algorithms.bo_utils.kernel_factory import KernelFactory
 from bbo.algorithms.bo_utils.acqf_factory import acqf_factory
 from bbo.algorithms.evolution.nsgaii import NSGAIIDesigner
 from bbo.algorithms.evolution.regularized_evolution import RegularizedEvolutionDesigner
@@ -41,16 +41,8 @@ class BODesigner(Designer):
     _device: str = field(default='cpu', kw_only=True)
 
     # surrogate model configuration
-    _mean_type: Optional[str] = field(
-        default=None, kw_only=True,
-        validator=validators.optional(validators.in_(['constant', 'mlp']))
-    )
-    _mean_config: Optional[dict] = field(default=None, kw_only=True)
-    _kernel_type: Optional[str] = field(
-        default=None, kw_only=True,
-        validator=validators.optional(validators.in_(['matern52', 'mlp', 'kumar', 'mixed']))
-    )
-    _kernel_config: dict = field(factory=dict, kw_only=True)
+    _mean_factory: MeanFactory = field(default=MeanFactory('constant'), kw_only=True)
+    _kernel_factory: KernelFactory = field(default=KernelFactory('matern52'), kw_only=True)
 
     # surrogate model optimization configuration
     _mll_optimizer: str = field(
@@ -100,13 +92,12 @@ class BODesigner(Designer):
         self._type2num = dict()
         for k in type2bounds:
             self._type2num[k] = len(type2bounds[k]['lb'])
-        self._kernel_config['type2num'] = self._type2num
 
         self._device = torch.device(self._device if torch.cuda.is_available() else 'cpu')
 
     def create_model(self, train_X, train_Y):
-        mean_module = mean_factory(self._mean_type, self._mean_config)
-        covar_module = kernel_factory(self._kernel_type, self._kernel_config)
+        mean_module = self._mean_factory()
+        covar_module = self._kernel_factory()
         # logger.info('='*20)
         # logger.info('mean_module: {}'.format(mean_module))
         # logger.info('covar_module: {}'.format(covar_module))
