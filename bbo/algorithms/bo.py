@@ -15,11 +15,12 @@ from gpytorch.constraints import GreaterThan
 
 from bbo.algorithms.base import Designer
 from bbo.algorithms.sampling.random import RandomDesigner
+from bbo.algorithms.evolution.pso import PSODesigner
 from bbo.utils.converters.converter import SpecType, BaseTrialConverter
 from bbo.utils.converters.torch_converter import GroupedFeatureTrialConverter
 from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.problem_statement import ProblemStatement, Objective
-from bbo.utils.trial import Trial
+from bbo.utils.trial import Trial, is_better_than
 from bbo.algorithms.bo_utils.mean_factory import mean_factory
 from bbo.algorithms.bo_utils.kernel_factory import kernel_factory
 from bbo.algorithms.bo_utils.acqf_factory import acqf_factory
@@ -71,7 +72,7 @@ class BODesigner(Designer):
     )
     _acqf_optimizer: str = field(
         default='l-bfgs', kw_only=True,
-        validator=validators.in_(['random', 'adam', 'l-bfgs', 'nsgaii', 're'])
+        validator=validators.in_(['random', 'adam', 'l-bfgs', 'pso', 'nsgaii', 're'])
     )
     _acqf_config: dict = field(factory=dict, kw_only=True)
     
@@ -190,6 +191,26 @@ class BODesigner(Designer):
                 grouped_features[k.name] = X
                 start_idx += d
             next_X = self._converter.to_trials(grouped_features)
+        elif self._acqf_optimizer == 'pso':
+            sp = self._problem_statement.search_space
+            obj = Objective()
+            obj.add_metric(self._acqf_type, ObjectiveMetricGoal.MAXIMIZE)
+            pso_problem_statement = ProblemStatement(sp, obj)
+            experimenter = TorchExperimenter(
+                lambda x: acqf(x.unsqueeze(1).to(self._device)).unsqueeze(-1),
+                pso_problem_statement
+            )
+            best_trial = None
+            for _ in range(self._acqf_config.get('num_restarts', 1)):
+                pso_designer = PSODesigner(pso_problem_statement)
+                for _ in range(self._acqf_config.get('epochs', 500)):
+                    trials = pso_designer.suggest()
+                    experimenter.evaluate(trials)
+                    pso_designer.update(trials)
+                cand_best_trial = pso_designer.result()[0]
+                if best_trial is None or is_better_than(pso_problem_statement.objective, cand_best_trial, best_trial):
+                    best_trial = cand_best_trial
+            next_X = [best_trial]
         elif self._acqf_optimizer == 'nsgaii':
             sp = self._problem_statement.search_space
             obj = Objective()
