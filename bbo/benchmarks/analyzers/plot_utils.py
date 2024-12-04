@@ -71,6 +71,8 @@ class PlotUtil:
                 ax.set_title(self._title)
                 ax.legend()
             if self._save_dir is not None:
+                if not os.path.exists(self._save_dir):
+                    os.makedirs(self._save_dir)
                 if besty:
                     file_name = os.path.join(self._save_dir, m.name + '_best.pdf')
                 else:
