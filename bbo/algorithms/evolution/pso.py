@@ -19,9 +19,10 @@ class PSODesigner(Designer):
         default=25,
         validator=validators.instance_of(int),
     )
-    _w: float = field(default=0.9, validator=validators.instance_of(float))
-    _c1: float = field(default=1.4, validator=validators.instance_of(float))
-    _c2: float = field(default=1.4, validator=validators.instance_of(float))
+    _w: float = field(default=0.9, validator=validators.instance_of(float), converter=float)
+    _c1: float = field(default=1.4, validator=validators.instance_of(float), converter=float)
+    _c2: float = field(default=1.4, validator=validators.instance_of(float), converter=float)
+    _max_v: float = field(default=0.2, validator=validators.instance_of(float), converter=float)
 
     _init_designer: Designer = field(init=False)
     _converter: BaseTrialConverter = field(init=False)
@@ -34,7 +35,7 @@ class PSODesigner(Designer):
     def __attrs_post_init__(self):
         self._init_designer = RandomDesigner(self._problem_statement)
         self._converter = DefaultTrialConverter.from_problem(self._problem_statement)
-        self._v = {k: np.random.randn(1, 1) for k in self._problem_statement.search_space.parameter_configs.keys()}
+        self._v = {k: np.zeros((1, 1)) for k in self._problem_statement.search_space.parameter_configs.keys()}
 
     def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         count = count or 1
@@ -50,10 +51,11 @@ class PSODesigner(Designer):
             for name, spec in self._converter.output_spec.items():
                 if spec.type == SpecType.DOUBLE:
                     size = curr_sample[name].shape
-                    v = self._w * self._v[name] + \
+                    self._v[name] = self._w * self._v[name] + \
                         self._c1 * np.random.uniform(size=size) * (pbest_sample[name] - curr_sample[name]) + \
                         self._c2 * np.random.uniform(size=size) * (gbest_sample[name] - curr_sample[name])
-                    sample[name] = curr_sample[name] + v
+                    self._v[name] = np.clip(self._v[name], -self._max_v, self._max_v)
+                    sample[name] = curr_sample[name] + self._v[name]
                     lb, ub = spec.bounds
                     sample[name] = np.clip(sample[name], lb, ub)
                 else:
@@ -72,8 +74,10 @@ class PSODesigner(Designer):
             if is_better_than(self._problem_statement.objective, trial, self._population[self._curr_id]):
                 self._pbest[self._curr_id] = trial
             self._population[self._curr_id] = trial
-        if self._gbest is None or is_better_than(self._problem_statement.objective, trial, self._gbest):
-            self._gbest = trial
+        if self._curr_id == self._population_size - 1:
+            for ind in self._population:
+                if self._gbest is None or is_better_than(self._problem_statement.objective, ind, self._gbest):
+                    self._gbest = ind
         self._curr_id = (self._curr_id + 1) % self._population_size
 
     def result(self) -> Sequence[Trial]:
