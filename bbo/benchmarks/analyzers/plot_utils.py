@@ -37,9 +37,9 @@ class PlotUtil:
     _ylabel: str | None = field(
         validator=validators.optional(validators.instance_of(str)), default=None, kw_only=True
     )
-    _save_path: str | None = field(
+    _save_dir: str | None = field(
         validator=validators.optional(validators.instance_of(str)),
-        default='log/plot_result.pdf', kw_only=True
+        default='bbo_log', kw_only=True
     )
     _legend_show: bool = field(default=True, validator=validators.instance_of(bool), kw_only=True)
     _ncols: int | None = field(
@@ -65,6 +65,21 @@ class PlotUtil:
 
     def add_result(self, name: str, df: pd.DataFrame):
         self._allresults.append(Result(name, df))
+
+    def save_results(self):
+        save_dir = os.path.join(self._save_dir, 'plot_results')
+        if save_dir is not None:
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+        for r in self._allresults:
+            r.data.to_csv(os.path.join(save_dir, r.name + '.csv'))
+
+    def load_results(self):
+        load_dir = os.path.join(self._save_dir, 'plot_results')
+        for fname in os.listdir(load_dir):
+            fpath = os.path.join(load_dir, fname)
+            df = pd.read_csv(fpath, index_col=0)
+            self.add_result(fname.rstrip('.csv'), df)
 
     def plot(self):
         rc_params = matplotlib.rcParams
@@ -121,8 +136,7 @@ class PlotUtil:
         plt.tight_layout()
         matplotlib.rcParams.update(rc_params)
 
-        if self._save_path is not None:
-            save_dir = os.path.dirname(self._save_path)
-            if any(save_dir) and not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            plt.savefig(self._save_path)
+        if self._save_dir is not None:
+            if not os.path.exists(self._save_dir):
+                os.makedirs(self._save_dir)
+            plt.savefig(os.path.join(self._save_dir, 'plot_result.pdf'))
