@@ -1,5 +1,5 @@
 import numpy as np
-from vizier._src.benchmarks.experimenters.synthetic.bbob import (
+from bbo.benchmarks.experimenters.synthetic.vizier_bbob import (
     Rastrigin, BuecheRastrigin, LinearSlope, AttractiveSector, StepEllipsoidal,
     RosenbrockRotated, Ellipsoidal, Discus, BentCigar, SharpRidge,
     DifferentPowers, Weierstrass, SchaffersF7, SchaffersF7IllConditioned, GriewankRosenbrock,
