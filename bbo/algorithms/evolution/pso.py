@@ -76,8 +76,5 @@ class PSODesigner(Designer):
             self._gbest = trial
         self._curr_id = (self._curr_id + 1) % self._population_size
 
-    def _reset(self, trials: Sequence[Trial]=None):
-        pass
-
     def result(self) -> Sequence[Trial]:
         return [self._gbest]

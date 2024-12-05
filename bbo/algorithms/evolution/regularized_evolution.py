@@ -85,9 +85,3 @@ class RegularizedEvolutionDesigner(Designer):
         else:
             i = np.argmin(ys)
         return [self._population[i]]
-    
-    def _reset(self, trials: Sequence[Trial]=None):
-        topk = topk_trials(
-            self._problem_statement.objective, trials, self._population_size
-        )
-        self.update(topk)

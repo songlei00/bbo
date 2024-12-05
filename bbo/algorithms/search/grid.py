@@ -54,8 +54,7 @@ class GridSearchDesigner(Designer):
         return [Trial(pd) for pd in parameter_dicts]
 
     def _update(self, completed: Sequence[Trial]) -> None:
-        self._trials.extend(completed)
-        self._epoch += 1
+        pass
 
     def _get_grid_from_parameter_config(
         self,
@@ -84,8 +83,3 @@ class GridSearchDesigner(Designer):
         for k in grid_values.keys():
             random.shuffle(grid_values[k])
         return grid_values
-    
-    def _reset(self, trials: Sequence[Trial]=None):
-        self._current_idx = 0
-        if self._shuffle:
-            self._grid_values = self._shuffle_grid()

@@ -307,6 +307,3 @@ class BODesigner(Designer):
 
     def _update(self, completed: Sequence[Trial]) -> None:
         pass
-
-    def _reset(self, trials: Sequence[Trial]=None):
-        pass

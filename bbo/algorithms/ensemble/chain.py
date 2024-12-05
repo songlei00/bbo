@@ -46,8 +46,3 @@ class ChainDesigner(Designer):
         if self._curr_quota == 0:
             self._curr_idx = (self._curr_idx + 1) % len(self._cand_designers)
             self._curr_quota = self._cand_quota[self._curr_idx]
-    
-    def _reset(self, trials: Sequence[Trial]=None):
-        self._curr_idx = 0
-        self._curr_quota = self._cand_quota[self._curr_idx]
-        self.update(trials)

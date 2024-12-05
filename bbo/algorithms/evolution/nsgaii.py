@@ -77,10 +77,6 @@ class NSGAIIDesigner(Designer):
         Evaluator().eval(static, self._last_pop)
         self._impl.tell(infills=self._last_pop)
 
-    def _reset(self, trials: Sequence[Trial]=None):
-        self._init_nsga()
-        self.update(trials)
-
     def result(self) -> Sequence[Trial]:
         res = self._impl.result()
         X, F = np.atleast_2d(res.X), np.atleast_2d(res.F)

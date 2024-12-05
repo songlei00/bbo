@@ -79,7 +79,6 @@ class CMAESDesigner(Designer):
         return self._converter.to_trials(pop)
 
     def _update(self, completed: Sequence[Trial]) -> None:
-        self._trials.extend(completed)
         self._epoch += 1
         while completed:
             self._curr_trials.append(completed.pop())
@@ -91,7 +90,3 @@ class CMAESDesigner(Designer):
                 labels = [v.item() for v in labels]
                 self._cmaes.tell(features, labels)
                 self._curr_trials.clear()
-
-    def _reset(self, trials: Sequence[Trial]=None):
-        self._init_cmaes()
-        self.update(trials)

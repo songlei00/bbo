@@ -39,8 +39,6 @@ class LocalSearchDesigner(Designer):
         return ret
 
     def _update(self, completed: Sequence[Trial]) -> None:
-        self._trials.extend(completed)
-        self._epoch += 1
         for suggestion in completed:
             if self._best_suggestion is None or is_better_than(
                 self._problem_statement.objective,
@@ -60,7 +58,3 @@ class LocalSearchDesigner(Designer):
             new_v = self._mutate_operator(sample[key], spec)
             sample[key] = new_v
         return self._converter.to_trials(sample)[0]
-
-    def _reset(self, trials: Sequence[Trial]=None):
-        self._best_suggestion = None
-        self.update(trials)

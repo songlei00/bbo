@@ -19,11 +19,6 @@ class Designer:
         self._epoch += 1
         self._update(completed)
 
-    def reset(self, trials: Sequence[Trial]=None):
-        self._trials = trials or list()
-        self._epoch = 0
-        self._reset(trials)
-
     @property
     def trials(self):
         return self._trials
@@ -34,8 +29,4 @@ class Designer:
 
     @abstractmethod
     def _update(self, completed: Sequence[Trial]) -> None:
-        pass
-
-    @abstractmethod
-    def _reset(self, trials: Sequence[Trial]=None):
         pass
