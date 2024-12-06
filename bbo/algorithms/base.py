@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Sequence, Optional, List
 
-from attrs import define, field, validators, evolve
+from attrs import define, field, validators
 
 from bbo.utils.trial import Trial
 

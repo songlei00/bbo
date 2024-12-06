@@ -25,6 +25,7 @@ from bbo.algorithms.bo_utils.acqf_factory import AcqfFactory
 from bbo.algorithms.evolution.nsgaii import NSGAIIDesigner
 from bbo.algorithms.evolution.regularized_evolution import RegularizedEvolutionDesigner
 from bbo.benchmarks.experimenters.torch_experimenter import TorchExperimenter
+from bbo.utils.utils import timer_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,10 @@ class BODesigner(Designer):
         default='lbfgs', kw_only=True,
         validator=validators.in_(['random', 'adam', 'lbfgs', 'pso', 'nsgaii', 're'])
     )
-    _lr: float = field(default=0.01, validator=validators.instance_of(float), converter=float)
-    _epochs: int = field(default=200, validator=validators.instance_of(int))
-    _num_restarts: int = field(default=3, validator=validators.instance_of(int))
-    _num_raw_samples: int = field(default=2048, validator=validators.instance_of(int))
+    _lr: float = field(default=0.01, validator=validators.instance_of(float), converter=float, kw_only=True)
+    _epochs: int = field(default=200, validator=validators.instance_of(int), kw_only=True)
+    _num_restarts: int = field(default=3, validator=validators.instance_of(int), kw_only=True)
+    _num_raw_samples: int = field(default=2048, validator=validators.instance_of(int), kw_only=True)
     
     # internal attributes
     _init_designer: Designer = field(init=False)
@@ -89,6 +90,7 @@ class BODesigner(Designer):
 
         self._device = torch.device(self._device if torch.cuda.is_available() else 'cpu')
 
+    @timer_wrapper
     def create_model(self, train_X, train_Y):
         mean_module = self._mean_factory()
         covar_module = self._kernel_factory()
@@ -98,6 +100,7 @@ class BODesigner(Designer):
 
         return mll, model
 
+    @timer_wrapper
     def optimize_model(self, mll, model, train_X, train_Y):
         if self._mll_optimizer == 'l-bfgs':
             fit_gpytorch_mll(mll)
@@ -116,6 +119,7 @@ class BODesigner(Designer):
         else:
             raise NotImplementedError
     
+    @timer_wrapper
     def optimize_acqf(self, acqf) -> Sequence[Trial]:
         def create_acqf_problem():
             sp = self._problem_statement.search_space
@@ -248,6 +252,7 @@ class BODesigner(Designer):
 
         return next_X
 
+    @timer_wrapper
     def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         if len(self._trials) < self._n_init:
             next_X = self._init_designer.suggest(count)
