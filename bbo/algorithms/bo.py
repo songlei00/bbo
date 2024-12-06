@@ -1,15 +1,13 @@
 import logging
-from typing import List, Sequence, Optional, Union
+from typing import Sequence, Optional
 
 from attrs import define, field, validators, evolve
 import numpy as np
 import torch
 from torch import optim
-
-import botorch
+from torch.quasirandom import SobolEngine
 from botorch import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
-from botorch.optim.initializers import initialize_q_batch_nonneg
 import gpytorch
 from gpytorch.constraints import GreaterThan
 
@@ -23,7 +21,7 @@ from bbo.utils.problem_statement import ProblemStatement, Objective
 from bbo.utils.trial import Trial, is_better_than
 from bbo.algorithms.bo_utils.mean_factory import MeanFactory
 from bbo.algorithms.bo_utils.kernel_factory import KernelFactory
-from bbo.algorithms.bo_utils.acqf_factory import acqf_factory
+from bbo.algorithms.bo_utils.acqf_factory import AcqfFactory
 from bbo.algorithms.evolution.nsgaii import NSGAIIDesigner
 from bbo.algorithms.evolution.regularized_evolution import RegularizedEvolutionDesigner
 from bbo.benchmarks.experimenters.torch_experimenter import TorchExperimenter
@@ -53,21 +51,17 @@ class BODesigner(Designer):
     _mll_epochs: Optional[int] = field(default=None, kw_only=True)
 
     # acquisition function configuration
-    _acqf_type: Union[str, List[str]] = field(
-        default='qlogEI', kw_only=True,
-        validator=validators.or_(
-            validators.in_(['qEI', 'qUCB', 'qPI', 'qlogEI']),
-            validators.deep_iterable(
-                validators.in_(['qEI', 'qUCB', 'qPI', 'qlogEI'])
-            ),
-        )
+    _acqf_factory: AcqfFactory = field(default=AcqfFactory('qlogEI'), kw_only=True)
+    _acqf_optimizer_type: str = field(
+        default='lbfgs', kw_only=True,
+        validator=validators.in_(['random', 'adam', 'lbfgs', 'pso', 'nsgaii', 're'])
     )
-    _acqf_optimizer: str = field(
-        default='l-bfgs', kw_only=True,
-        validator=validators.in_(['random', 'adam', 'l-bfgs', 'pso', 'nsgaii', 're'])
-    )
-    _acqf_config: dict = field(factory=dict, kw_only=True)
+    _lr: float = field(default=0.01, validator=validators.instance_of(float), converter=float)
+    _epochs: int = field(default=200, validator=validators.instance_of(int))
+    _num_restarts: int = field(default=3, validator=validators.instance_of(int))
+    _num_raw_samples: int = field(default=2048, validator=validators.instance_of(int))
     
+    # internal attributes
     _init_designer: Designer = field(init=False)
     _converter: BaseTrialConverter = field(init=False)
     _type2bounds = field(init=False)
@@ -98,10 +92,6 @@ class BODesigner(Designer):
     def create_model(self, train_X, train_Y):
         mean_module = self._mean_factory()
         covar_module = self._kernel_factory()
-        # logger.info('='*20)
-        # logger.info('mean_module: {}'.format(mean_module))
-        # logger.info('covar_module: {}'.format(covar_module))
-        # logger.info('='*20)
         model = SingleTaskGP(train_X, train_Y, covar_module=covar_module, mean_module=mean_module).to(self._device)
         model.likelihood.noise_covar.register_constraint('raw_noise', GreaterThan(1e-4))
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
@@ -125,47 +115,60 @@ class BODesigner(Designer):
             model.likelihood.eval()
         else:
             raise NotImplementedError
-
-    def create_acqf(self, model, train_X, train_Y):
-        if isinstance(self._acqf_type, list):
-            acqf = []
-            for acqf_type in self._acqf_type:
-                acqf_tmp = acqf_factory(acqf_type, model, train_X, train_Y)
-                acqf.append(acqf_tmp)
-        else:
-            acqf = acqf_factory(self._acqf_type, model, train_X, train_Y)
-            
-        return acqf
     
     def optimize_acqf(self, acqf) -> Sequence[Trial]:
-        if self._acqf_optimizer in ['random', 'adam', 'l-bfgs']:
-            num_restarts = 10
+        def create_acqf_problem():
+            sp = self._problem_statement.search_space
+            obj = Objective()
+            if isinstance(self._acqf_factory.acqf_type, str):
+                obj.add_metric(self._acqf_factory.acqf_type, ObjectiveMetricGoal.MAXIMIZE)
+            else:
+                for acqf_type in self._acqf_factory.acqf_type:
+                    obj.add_metric(acqf_type, ObjectiveMetricGoal.MAXIMIZE)
+            problem_statement = ProblemStatement(sp, obj)
+            def acqf_obj(x, acqf):
+                if not isinstance(acqf, (tuple, list)):
+                    acqf = [acqf]
+                y = []
+                for acqf_tmp in acqf:
+                    y.append(acqf_tmp(x.unsqueeze(1).to(self._device)).unsqueeze(-1))
+                y = torch.hstack(y)
+                return y
+            experimenter = TorchExperimenter(lambda x: acqf_obj(x, acqf), problem_statement)
+            return problem_statement, experimenter
+
+        if self._acqf_optimizer_type in ['random', 'adam', 'lbfgs']:
             lb = torch.cat([bounds['lb'] for bounds in self._type2bounds.values()]).to(self._device)
             ub = torch.cat([bounds['ub'] for bounds in self._type2bounds.values()]).to(self._device)
-            Xraw = lb + (ub - lb) * torch.rand(100*num_restarts, 1, len(lb)).to(self._device)
+            seed = np.random.randint(int(5e5))
+            sobol = SobolEngine(len(lb), scramble=True, seed=seed) 
+            Xraw = sobol.draw(self._num_raw_samples).to(self._device)
+            Xraw = Xraw * (ub - lb) + lb
+            Xraw = Xraw.unsqueeze(1)
             Yraw = acqf(Xraw)
-            cand_X = initialize_q_batch_nonneg(Xraw, Yraw, num_restarts)
+            indices = torch.argsort(Yraw)[-self._num_restarts: ]
+            cand_X = Xraw[indices]
             cand_X.requires_grad_(True)
 
-            if self._acqf_optimizer == 'random':
+            if self._acqf_optimizer_type == 'random':
                 pass
-            elif self._acqf_optimizer == 'adam':
-                optimizer = torch.optim.Adam([cand_X], lr=self._acqf_config.get('lr', 0.01))
-                for i in range(self._acqf_config.get('epochs', 200)):
+            elif self._acqf_optimizer_type == 'adam':
+                optimizer = torch.optim.Adam([cand_X], lr=self._lr)
+                for i in range(self._epochs):
                     optimizer.zero_grad()
                     loss = - acqf(cand_X).mean()
                     loss.backward()
                     optimizer.step()
                     for j, (l, u) in enumerate(zip(lb, ub)):
                         cand_X.data[..., j].clamp_(l, u)
-            elif self._acqf_optimizer == 'l-bfgs':
-                optimizer = torch.optim.LBFGS([cand_X], lr=self._acqf_config.get('lr', 0.01))
+            elif self._acqf_optimizer_type == 'lbfgs':
+                optimizer = torch.optim.LBFGS([cand_X], lr=self._lr)
                 def closure():
                     optimizer.zero_grad()
                     loss = - acqf(cand_X).mean()
                     loss.backward()
                     return loss
-                for i in range(self._acqf_config.get('epochs', 50)):
+                for i in range(self._epochs):
                     optimizer.step(closure)
                     for j, (l, u) in enumerate(zip(lb, ub)):
                         cand_X.data[..., j].clamp_(l, u)
@@ -182,52 +185,26 @@ class BODesigner(Designer):
                 grouped_features[k.name] = X
                 start_idx += d
             next_X = self._converter.to_trials(grouped_features)
-        elif self._acqf_optimizer == 'pso':
-            sp = self._problem_statement.search_space
-            obj = Objective()
-            obj.add_metric(self._acqf_type, ObjectiveMetricGoal.MAXIMIZE)
-            pso_problem_statement = ProblemStatement(sp, obj)
-            experimenter = TorchExperimenter(
-                lambda x: acqf(x.unsqueeze(1).to(self._device)).unsqueeze(-1),
-                pso_problem_statement
-            )
+        elif self._acqf_optimizer_type == 'pso':
+            problem_statement, experimenter = create_acqf_problem()
             best_trial = None
-            for _ in range(self._acqf_config.get('num_restarts', 1)):
-                pso_designer = PSODesigner(pso_problem_statement)
-                for _ in range(self._acqf_config.get('epochs', 500)):
+            for _ in range(self._num_restarts):
+                pso_designer = PSODesigner(problem_statement)
+                for _ in range(self._epochs):
                     trials = pso_designer.suggest()
                     experimenter.evaluate(trials)
                     pso_designer.update(trials)
                 cand_best_trial = pso_designer.result()[0]
-                if best_trial is None or is_better_than(pso_problem_statement.objective, cand_best_trial, best_trial):
+                if best_trial is None or is_better_than(problem_statement.objective, cand_best_trial, best_trial):
                     best_trial = cand_best_trial
             next_X = [best_trial]
-        elif self._acqf_optimizer == 'nsgaii':
-            sp = self._problem_statement.search_space
-            obj = Objective()
-            if isinstance(self._acqf_type, list):
-                for name in self._acqf_type:
-                    obj.add_metric(name, ObjectiveMetricGoal.MAXIMIZE)
-            else:
-                obj.add_metric(self._acqf_type, ObjectiveMetricGoal.MAXIMIZE)
-            if obj.num_metrics() <= 1:
+        elif self._acqf_optimizer_type == 'nsgaii':
+            problem_statement, experimenter = create_acqf_problem()
+            if problem_statement.objective.num_metrics() <= 1:
                 logger.warning('NSGA-II is a multi-objective optimization algorithm, but only single objective is defined')
-            nsgaii_problem_statement = ProblemStatement(sp, obj)
-            nsgaii_designer = NSGAIIDesigner(
-                nsgaii_problem_statement,
-                pop_size=self._acqf_config.get('pop_size', 20),
-                n_offsprings=self._acqf_config.get('n_offsprings', None),
-            )
-            def acqf_obj(x, acqf):
-                if not isinstance(acqf, (tuple, list)):
-                    acqf = [acqf]
-                y = []
-                for acqf_tmp in acqf:
-                    y.append(acqf_tmp(x.unsqueeze(1).to(self._device)).unsqueeze(-1))
-                y = torch.hstack(y)
-                return y
-            experimenter = TorchExperimenter(lambda x: acqf_obj(x, acqf), nsgaii_problem_statement)
-            for _ in range(self._acqf_config.get('epochs', 200)):
+            nsgaii_designer = NSGAIIDesigner(problem_statement, pop_size=20, n_offsprings=None)
+            
+            for _ in range(self._epochs):
                 trials = nsgaii_designer.suggest()
                 experimenter.evaluate(trials)
                 nsgaii_designer.update(trials)
@@ -253,22 +230,19 @@ class BODesigner(Designer):
                 if quota > 0:
                     trials = self._init_designer.suggest(quota)
                     next_X.extend(trials)
-        elif self._acqf_optimizer == 're':
-            sp = self._problem_statement.search_space
-            obj = Objective()
-            obj.add_metric(self._acqf_type, ObjectiveMetricGoal.MAXIMIZE)
-            re_problem_statement = ProblemStatement(sp, obj)
-            re_designer = RegularizedEvolutionDesigner(re_problem_statement)
-            experimenter = TorchExperimenter(
-                lambda x: acqf(x.unsqueeze(1).to(self._device)).unsqueeze(-1), 
-                re_problem_statement
-            )
-            for _ in range(self._acqf_config.get('epochs', 200)):
-                trials = re_designer.suggest()
-                experimenter.evaluate(trials)
-                re_designer.update(trials)
-            best_trials = re_designer.result()
-            next_X = best_trials
+        elif self._acqf_optimizer_type == 're':
+            problem_statement, experimenter = create_acqf_problem()
+            best_trial = None
+            for _ in range(self._num_restarts):
+                re_designer = RegularizedEvolutionDesigner(problem_statement)
+                for _ in range(self._epochs):
+                    trials = re_designer.suggest()
+                    experimenter.evaluate(trials)
+                    re_designer.update(trials)
+                cand_best_trial = re_designer.result()[0]
+                if best_trial is None or is_better_than(problem_statement.objective, cand_best_trial, best_trial):
+                    best_trial = cand_best_trial
+            next_X = [best_trial]
         else:
             raise NotImplementedError
 
@@ -300,7 +274,7 @@ class BODesigner(Designer):
         
             mll, model = self.create_model(train_X, train_Y)
             self.optimize_model(mll, model, train_X, train_Y)
-            acqf = self.create_acqf(model, train_X, train_Y)
+            acqf = self._acqf_factory(model, train_X, train_Y)
             next_X = self.optimize_acqf(acqf)
 
         return next_X
