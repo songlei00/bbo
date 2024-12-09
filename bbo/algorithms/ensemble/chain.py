@@ -34,9 +34,6 @@ class ChainDesigner(Designer):
         self._curr_quota = self._cand_quota[0]
 
     def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
-        logger.debug('epoch: {}, designer: {}'.format(
-            self._epoch, self._cand_designers[self._curr_idx].__class__.__name__
-        ))
         return self._cand_designers[self._curr_idx].suggest(count)
 
     def _update(self, completed: Sequence[Trial]) -> None:
