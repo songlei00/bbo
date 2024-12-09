@@ -1,5 +1,6 @@
 import logging
-from typing import Sequence, Optional
+import enum
+from typing import Sequence, Optional, List
 
 from attrs import define, field, validators, evolve
 import numpy as np
@@ -28,6 +29,11 @@ from bbo.benchmarks.experimenters.torch_experimenter import TorchExperimenter
 from bbo.utils.utils import timer_wrapper
 
 logger = logging.getLogger(__name__)
+
+
+class RunningStatus(enum.Enum):
+    INIT = 'INIT'
+    RUN = 'RUN'
 
 
 @define
@@ -61,12 +67,26 @@ class BODesigner(Designer):
     _epochs: int = field(default=200, validator=validators.instance_of(int), kw_only=True)
     _num_restarts: int = field(default=3, validator=validators.instance_of(int), kw_only=True)
     _num_raw_samples: int = field(default=2048, validator=validators.instance_of(int), kw_only=True)
+
+    # trust region
+    _use_trust_region: bool = field(default=True, kw_only=True)
+    _length_min: float = field(default=0.5**7, kw_only=True)
+    _length_max: float = field(default=1.6, kw_only=True)
+    _length_init: float = field(default=0.8, kw_only=True)
+    _failtol: int | None = field(default=None, kw_only=True)
+    _succtol: int = field(default=3, kw_only=True)
     
     # internal attributes
+    _trials: List[Trial] = field(factory=list, init=False)
     _init_designer: Designer = field(init=False)
     _converter: BaseTrialConverter = field(init=False)
     _type2bounds = field(init=False)
     _type2num = field(init=False)
+    _length: float = field(init=False)
+    _failcnt: int = field(default=0, init=False)
+    _succcnt: int = field(default=0, init=False)
+    _best_suggestion: Trial = field(default=None, init=False)
+    _running_status: RunningStatus = field(default=RunningStatus.INIT, init=False)
 
     def __attrs_post_init__(self):
         self._init_designer = RandomDesigner(self._problem_statement)
@@ -89,11 +109,13 @@ class BODesigner(Designer):
             self._type2num[k] = len(type2bounds[k]['lb'])
 
         self._device = torch.device(self._device if torch.cuda.is_available() else 'cpu')
+        self._failtol = self._failtol or max(4, self._problem_statement.search_space.num_parameters())
+        self._length = self._length_init
 
     @timer_wrapper
     def create_model(self, train_X, train_Y):
         mean_module = self._mean_factory()
-        covar_module = self._kernel_factory()
+        covar_module = self._kernel_factory(train_X.shape[-1])
         model = SingleTaskGP(train_X, train_Y, covar_module=covar_module, mean_module=mean_module).to(self._device)
         model.likelihood.noise_covar.register_constraint('raw_noise', GreaterThan(1e-4))
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
@@ -120,7 +142,18 @@ class BODesigner(Designer):
             raise NotImplementedError
     
     @timer_wrapper
-    def optimize_acqf(self, acqf) -> Sequence[Trial]:
+    def optimize_acqf(self, model, acqf, train_X, train_Y) -> Sequence[Trial]:
+        weights = model.covar_module.base_kernel.base_kernel.lengthscale.cpu().detach().numpy().ravel()
+        weights = weights / weights.mean()
+        weights = weights / np.prod(np.power(weights, 1.0 / len(weights)))
+        weights = torch.from_numpy(weights)
+        if self._problem_statement.objective.item().goal == ObjectiveMetricGoal.MAXIMIZE:
+            center_X = train_X[train_Y.argmax()]
+        else:
+            center_X = train_X[train_Y.argmin()]
+        trust_region_lb = torch.clip(center_X - weights * self._length / 2.0, 0.0, 1.0)
+        trust_region_ub = torch.clip(center_X + weights * self._length / 2.0, 0.0, 1.0)
+
         def create_acqf_problem():
             sp = self._problem_statement.search_space
             obj = Objective()
@@ -130,6 +163,11 @@ class BODesigner(Designer):
                 for acqf_type in self._acqf_factory.acqf_type:
                     obj.add_metric(acqf_type, ObjectiveMetricGoal.MAXIMIZE)
             problem_statement = ProblemStatement(sp, obj)
+            if self._use_trust_region:
+                for i, (k, v) in enumerate(problem_statement.search_space.parameter_configs.items()):
+                    problem_statement.search_space.parameter_configs[k] = evolve(
+                        v, bounds=(trust_region_lb[i].numpy().item(), trust_region_ub[i].numpy().item())
+                    )
             def acqf_obj(x, acqf):
                 if not isinstance(acqf, (tuple, list)):
                     acqf = [acqf]
@@ -142,8 +180,11 @@ class BODesigner(Designer):
             return problem_statement, experimenter
 
         if self._acqf_optimizer_type in ['random', 'adam', 'lbfgs']:
-            lb = torch.cat([bounds['lb'] for bounds in self._type2bounds.values()]).to(self._device)
-            ub = torch.cat([bounds['ub'] for bounds in self._type2bounds.values()]).to(self._device)
+            if self._use_trust_region:
+                lb, ub = trust_region_lb, trust_region_ub
+            else:
+                lb = torch.cat([bounds['lb'] for bounds in self._type2bounds.values()]).to(self._device)
+                ub = torch.cat([bounds['ub'] for bounds in self._type2bounds.values()]).to(self._device)
             seed = np.random.randint(int(5e5))
             sobol = SobolEngine(len(lb), scramble=True, seed=seed) 
             Xraw = sobol.draw(self._num_raw_samples).to(self._device)
@@ -255,8 +296,10 @@ class BODesigner(Designer):
     @timer_wrapper
     def _suggest(self, count: Optional[int]=None) -> Sequence[Trial]:
         if len(self._trials) < self._n_init:
+            self._running_status = RunningStatus.INIT
             next_X = self._init_designer.suggest(count)
         else:
+            self._running_status = RunningStatus.RUN
             count = count or 1
             features, labels = self._converter.convert(self._trials)
 
@@ -280,9 +323,45 @@ class BODesigner(Designer):
             mll, model = self.create_model(train_X, train_Y)
             self.optimize_model(mll, model, train_X, train_Y)
             acqf = self._acqf_factory(model, train_X, train_Y)
-            next_X = self.optimize_acqf(acqf)
+            next_X = self.optimize_acqf(model, acqf, train_X, train_Y)
 
         return next_X
 
     def _update(self, completed: Sequence[Trial]) -> None:
-        pass
+        self._trials.extend(completed)
+        if self._running_status == RunningStatus.RUN:
+            self._adjust_length(completed)
+
+        for trial in completed:
+            if self._best_suggestion is None or \
+                is_better_than(self._problem_statement.objective, trial, self._best_suggestion):
+                self._best_suggestion = trial
+
+        if self._length < self._length_min:
+            self._restart()
+
+    def _restart(self):
+        logger.info('epoch {}, restart'.format(self._base_epoch))
+        self._trials.clear()
+        self._failcnt = 0
+        self._succcnt = 0
+        self._length = self._length_init
+        self._best_suggestion = None
+
+    def _adjust_length(self, completed):
+        curr_best_trial = None
+        for trial in completed:
+            if curr_best_trial is None or is_better_than(self._problem_statement, trial, curr_best_trial):
+                curr_best_trial = trial
+                
+        if is_better_than(self._problem_statement.objective, curr_best_trial, self._best_suggestion):
+            self._succcnt += 1
+            self._failcnt = 0
+        else:
+            self._succcnt = 0
+            self._failcnt += 1
+        if self._succcnt == self._succtol:
+            self._length = min([2.0*self._length, self._length_max])
+        elif self._failcnt == self._failtol:
+            self._length /= 2.0
+            self._failcnt = 0

@@ -37,7 +37,7 @@ class KernelFactory:
         kw_only=True
     )
 
-    def __call__(self):
+    def __call__(self, ard_num_dims=None):
         if self._kernel_type in ['matern52', 'mlp', 'kumar']:
             if self._kernel_type == 'matern52':
                 wrapper = IdentityWrapper()
@@ -47,7 +47,14 @@ class KernelFactory:
                 wrapper = KumarWrapper()
             else:
                 raise NotImplementedError('Unsupported kernel wrapper')
-            base_kernel = ScaleKernel(MaternKernel())
+            base_kernel = ScaleKernel(
+                base_kernel=MaternKernel(
+                    nu=2.5,
+                    ard_num_dims=ard_num_dims,
+                    lengthscale_prior=GammaPrior(3.0, 6.0),
+                ),
+                outputscale_prior=GammaPrior(2.0, 0.15),
+            )
             covar_module = WrapperKernel(base_kernel, wrapper)
         elif self._kernel_type == 'mixed':
             double_kernel = ScaleKernel(MaternKernel())
