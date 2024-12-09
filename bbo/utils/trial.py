@@ -146,3 +146,10 @@ def topk_trials(objective: Objective, trials: Sequence[Trial], k: int):
             heapq.heappush(h, (v, (trial, i)))
     h = list(i[1][0] for i in sorted(h, key=lambda x: x[1][1]))
     return h
+
+
+def check_bounds(search_space, trial: Trial):
+    for k, v in search_space.parameter_configs.items():
+        lb, ub = v.bounds
+        if trial.parameters[k].value < lb and trial.parameters[k].value > ub:
+            raise RuntimeError('Trial out of bounds')
