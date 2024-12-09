@@ -1,5 +1,6 @@
 import logging
 import enum
+import copy
 from typing import Sequence, Optional, List
 
 from attrs import define, field, validators, evolve
@@ -140,7 +141,7 @@ class BODesigner(Designer):
             model.likelihood.eval()
         else:
             raise NotImplementedError
-    
+
     @timer_wrapper
     def optimize_acqf(self, model, acqf, train_X, train_Y) -> Sequence[Trial]:
         weights = model.covar_module.base_kernel.base_kernel.lengthscale.cpu().detach().numpy().ravel()
@@ -155,7 +156,7 @@ class BODesigner(Designer):
         trust_region_ub = torch.clip(center_X + weights * self._length / 2.0, 0.0, 1.0)
 
         def create_acqf_problem():
-            sp = self._problem_statement.search_space
+            sp = copy.deepcopy(self._problem_statement.search_space)
             obj = Objective()
             if isinstance(self._acqf_factory.acqf_type, str):
                 obj.add_metric(self._acqf_factory.acqf_type, ObjectiveMetricGoal.MAXIMIZE)
@@ -165,8 +166,10 @@ class BODesigner(Designer):
             problem_statement = ProblemStatement(sp, obj)
             if self._use_trust_region:
                 for i, (k, v) in enumerate(problem_statement.search_space.parameter_configs.items()):
+                    lb = trust_region_lb[i].numpy().item() * (v.bounds[1] - v.bounds[0]) + v.bounds[0]
+                    ub = trust_region_ub[i].numpy().item() * (v.bounds[1] - v.bounds[0]) + v.bounds[0]
                     problem_statement.search_space.parameter_configs[k] = evolve(
-                        v, bounds=(trust_region_lb[i].numpy().item(), trust_region_ub[i].numpy().item())
+                        v, bounds=(lb, ub)
                     )
             def acqf_obj(x, acqf):
                 if not isinstance(acqf, (tuple, list)):
