@@ -350,6 +350,7 @@ class BODesigner(Designer):
         self._succcnt = 0
         self._length = self._length_init
         self._best_suggestion = None
+        self._running_status = RunningStatus.INIT
 
     def _adjust_length(self, completed):
         curr_best_trial = None
