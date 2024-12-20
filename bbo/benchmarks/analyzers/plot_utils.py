@@ -74,12 +74,14 @@ class PlotUtil:
         for r in self._allresults:
             r.data.to_csv(os.path.join(save_dir, r.name + '.csv'))
 
-    def load_results(self):
+    def load_results(self, filter_fn=lambda path: True):
         load_dir = self._save_dir
-        for fname in os.listdir(load_dir):
-            fpath = os.path.join(load_dir, fname)
-            df = pd.read_csv(fpath, index_col=0)
-            self.add_result(fname.rstrip('.csv'), df)
+        for f_path, d_name, f_names in os.walk(load_dir):
+            for f_name in f_names:
+                path = os.path.join(f_path, f_name)
+                if f_name.endswith('.csv') and filter_fn(path):
+                    df = pd.read_csv(path, index_col=0)
+                    self.add_result(f_name.rstrip('.csv'), df)
 
     def plot(self):
         rc_params = matplotlib.rcParams
