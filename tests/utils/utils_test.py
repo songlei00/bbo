@@ -5,7 +5,7 @@ from bbo.utils.parameter_config import SearchSpace, ScaleType
 from bbo.utils.metric_config import Objective, ObjectiveMetricGoal
 from bbo.utils.problem_statement import ProblemStatement
 from bbo.utils.trial import Trial, MetricDict
-from bbo.benchmarks.analyzers.utils import trials2df, df2trials
+from bbo.utils.utils import trials2df, df2trials
 
 
 class UtilsTest(unittest.TestCase):
