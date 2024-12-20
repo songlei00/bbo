@@ -67,7 +67,7 @@ class PlotUtil:
         self._allresults.append(Result(name, df))
 
     def save_results(self):
-        save_dir = os.path.join(self._save_dir, 'plot_results')
+        save_dir = self._save_dir
         if save_dir is not None:
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
@@ -75,7 +75,7 @@ class PlotUtil:
             r.data.to_csv(os.path.join(save_dir, r.name + '.csv'))
 
     def load_results(self):
-        load_dir = os.path.join(self._save_dir, 'plot_results')
+        load_dir = self._save_dir
         for fname in os.listdir(load_dir):
             fpath = os.path.join(load_dir, fname)
             df = pd.read_csv(fpath, index_col=0)
