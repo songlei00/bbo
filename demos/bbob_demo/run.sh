@@ -2,39 +2,40 @@
 
 algos=(
     random
-    ls
+    adam_bo
     re
     pso
-    random_bo
+    eagle
+    cmaes
 )
 
 funcs=(
     GriewankRosenbrock
-    Lunacek
-    Rastrigin
-    RosenbrockRotated
-    SharpRidge
-    AttractiveSector
-    BentCigar
-    DifferentPowers
-    Discus
-    Gallagher101Me
-    Gallagher21Me
-    Katsuura
-    LinearSlope
-    NegativeMinDifference
-    NegativeSphere
-    SchaffersF7IllConditioned
-    SchaffersF7
-    StepEllipsoidal
-    Weierstrass
+    # Lunacek
+    # Rastrigin
+    # RosenbrockRotated
+    # SharpRidge
+    # AttractiveSector
+    # BentCigar
+    # DifferentPowers
+    # Discus
+    # Gallagher101Me
+    # Gallagher21Me
+    # Katsuura
+    # LinearSlope
+    # NegativeMinDifference
+    # NegativeSphere
+    # SchaffersF7IllConditioned
+    # SchaffersF7
+    # StepEllipsoidal
+    # Weierstrass
 )
 min_seed=0
-max_seed=4
+max_seed=0
 
 available_gpu=(0)
 num_gpu=${#available_gpu[@]}
-max_proc=20
+max_proc=10
 echo 'GPU idx: '${available_gpu[@]}
 echo 'Number of GPU: '$num_gpu
 echo 'Max number of processes: '$max_proc
@@ -61,10 +62,11 @@ do
             curr_idx=$((( $curr_idx + 1 ) % $num_gpu))
             echo 'proc id: '$proc_id', algo: '$algo', func: '$func', gpu idx: '$curr_gpu
             {
-                python main_bbob.py \
+                python main.py \
                     --algo=$algo \
                     --func=$func \
-                    --seed=$seed
+                    --seed=$seed \
+                    --N=200
 
                 sleep 1
                 echo >&7 $proc_id
