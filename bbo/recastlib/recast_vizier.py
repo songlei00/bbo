@@ -26,7 +26,7 @@ class VizierDesigner(Designer):
     )
     _algorithm: str = field(validator=validators.in_([
         'vizier', 'eagle', 'cmaes'
-    ]), kw_only=True)
+    ]))
     _seed: int = field(default=0, validator=validators.instance_of(int), kw_only=True)
 
     _impl: vza.Designer = field(init=False)
