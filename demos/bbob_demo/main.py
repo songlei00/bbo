@@ -13,6 +13,7 @@ from bbo.algorithms import (
     RegularizedEvolutionDesigner, PSODesigner, BODesigner
 )
 from bbo.recastlib import VizierDesigner
+from bbo.recastlib import HEBODesigner
 from bbo.algorithms.bo_utils import MeanFactory, KernelFactory
 
 parser = argparse.ArgumentParser()
@@ -65,6 +66,8 @@ elif args.algo == 'pso':
     designer = PSODesigner(problem_statement)
 elif args.algo in ['vizier', 'eagle', 'cmaes']:
     designer = VizierDesigner(problem_statement, args.algo, seed=args.seed)
+elif args.algo == 'hebo':
+    designer = HEBODesigner(problem_statement, impl_kwargs={'scramble_seed': args.seed})
 else:
     raise NotImplementedError
 
