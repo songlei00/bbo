@@ -2,13 +2,6 @@ import logging
 from typing import Optional, Sequence
 
 from attrs import define, field, validators
-try:
-    from vizier import pyvizier as vz
-    from vizier import algorithms as vza
-    from vizier.algorithms import designers as vz_designers
-    import jax
-except ImportError:
-    pass
 
 from bbo.algorithms.base import Designer
 from bbo.utils.problem_statement import ProblemStatement
@@ -17,6 +10,14 @@ from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.trial import Trial, ParameterDict
 
 logger = logging.getLogger(__file__)
+
+try:
+    from vizier import pyvizier as vz
+    from vizier import algorithms as vza
+    from vizier.algorithms import designers as vz_designers
+    import jax
+except ImportError as e:
+    logger.warning('Import vizier error: {}'.format(e))
 
 
 @define
@@ -29,7 +30,7 @@ class VizierDesigner(Designer):
     ]))
     _seed: int = field(default=0, validator=validators.instance_of(int), kw_only=True)
 
-    _impl: vza.Designer = field(init=False)
+    _impl = field(init=False)
 
     def __attrs_post_init__(self):
         self._impl = self._algorithm_factory()
