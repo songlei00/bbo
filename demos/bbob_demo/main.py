@@ -64,7 +64,7 @@ elif args.algo == 're':
 elif args.algo == 'pso':
     designer = PSODesigner(problem_statement)
 elif args.algo in ['vizier', 'eagle', 'cmaes']:
-    designer = VizierDesigner(problem_statement, args.algo)
+    designer = VizierDesigner(problem_statement, args.algo, seed=args.seed)
 else:
     raise NotImplementedError
 
