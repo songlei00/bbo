@@ -70,7 +70,7 @@ class PlotUtil:
         save_dir = self._save_dir
         if save_dir is not None:
             if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
+                os.makedirs(save_dir, exist_ok=True)
         for r in self._allresults:
             r.data.to_csv(os.path.join(save_dir, r.name + '.csv'))
 
@@ -140,5 +140,5 @@ class PlotUtil:
 
         if self._save_dir is not None:
             if not os.path.exists(self._save_dir):
-                os.makedirs(self._save_dir)
+                os.makedirs(self._save_dir, exist_ok=True)
             plt.savefig(os.path.join(self._save_dir, 'plot_result.pdf'))
