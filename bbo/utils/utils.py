@@ -1,6 +1,7 @@
 import time
 import logging
 from typing import Sequence
+from datetime import datetime
 
 import pandas as pd
 
@@ -44,3 +45,6 @@ def df2trials(df: pd.DataFrame, problem_statement: ProblemStatement):
 
     trials = [Trial(parameters=p, metrics=m) for p, m in zip(parameter_dict, metric_dict)]
     return trials
+
+def now_time_str():
+    return datetime.now().strftime('%y%m%d%H%M%S')
