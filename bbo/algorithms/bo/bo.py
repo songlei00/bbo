@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch import optim
 from torch.quasirandom import SobolEngine
+from torch.utils.data import TensorDataset, DataLoader
 from botorch import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
 import gpytorch
@@ -21,9 +22,11 @@ from bbo.utils.converters.torch_converter import GroupedFeatureTrialConverter
 from bbo.utils.metric_config import ObjectiveMetricGoal
 from bbo.utils.problem_statement import ProblemStatement, Objective
 from bbo.utils.trial import Trial, is_better_than
-from bbo.algorithms.bo_utils.mean_factory import MeanFactory
-from bbo.algorithms.bo_utils.kernel_factory import KernelFactory
-from bbo.algorithms.bo_utils.acqf_factory import AcqfFactory
+from bbo.predictors.base import Predictor
+from bbo.predictors.gp import GPPredictor
+from bbo.predictors.gp.mean_factory import MeanFactory
+from bbo.predictors.gp.kernel_factory import KernelFactory
+from bbo.algorithms.bo.acqf_factory import AcqfFactory
 from bbo.algorithms.evolution.nsgaii import NSGAIIDesigner
 from bbo.algorithms.evolution.regularized_evolution import RegularizedEvolutionDesigner
 from bbo.benchmarks.experimenters.torch_experimenter import TorchExperimenter
@@ -47,6 +50,7 @@ class BODesigner(Designer):
     _device: str = field(default='cpu', kw_only=True)
 
     # surrogate model configuration
+    _predictor: Predictor = field(factory=lambda: GPPredictor())
     _mean_factory: MeanFactory = field(default=MeanFactory('constant'), kw_only=True)
     _kernel_factory: KernelFactory = field(default=KernelFactory('matern52'), kw_only=True)
 
@@ -116,7 +120,7 @@ class BODesigner(Designer):
     @timer_wrapper
     def create_model(self, train_X, train_Y):
         mean_module = self._mean_factory()
-        covar_module = self._kernel_factory(train_X.shape[-1])
+        covar_module = self._kernel_factory()
         model = SingleTaskGP(train_X, train_Y, covar_module=covar_module, mean_module=mean_module).to(self._device)
         model.likelihood.noise_covar.register_constraint('raw_noise', GreaterThan(1e-4))
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
@@ -128,15 +132,21 @@ class BODesigner(Designer):
         if self._mll_optimizer == 'l-bfgs':
             fit_gpytorch_mll(mll)
         elif self._mll_optimizer == 'adam':
+            train_Y = train_Y.squeeze()
+            train_dataset = TensorDataset(train_X, train_Y)
+            train_dataloader = DataLoader(train_dataset, 32, True)
             optimizer = optim.Adam(model.parameters(), lr=self._mll_lr)
             model.train()
             model.likelihood.train()
             for _ in range(self._mll_epochs):
-                optimizer.zero_grad()
-                output = model(train_X)
-                loss = - mll(output, train_Y.reshape(-1))
-                loss.backward()
-                optimizer.step()
+                for X, Y in train_dataloader:
+                    model.set_train_data(inputs=X, targets=Y, strict=False)
+                    optimizer.zero_grad()
+                    output = model(X)
+                    loss = - mll(output, Y)
+                    loss.backward()
+                    optimizer.step()
+            model.set_train_data(inputs=train_X, targets=train_Y, strict=False)
             model.eval()
             model.likelihood.eval()
         else:
