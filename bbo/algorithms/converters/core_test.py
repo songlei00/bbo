@@ -13,9 +13,6 @@
 # limitations under the License.
 
 import pytest
-import random
-import math
-from typing import Sequence
 
 import numpy as np
 
@@ -23,10 +20,15 @@ from bbo.algorithms.converters.core import (
     NumpyArraySpecType,
     DictOf2DArray,
     DefaultTrialConverter,
-    TrialToArrayConverter
+    TrialToArrayConverter,
+    TrialToTypeArrayConverter
 )
-from bbo.shared.trial import Measurement, Trial
-from bbo.shared.base_study_config import ObjectiveMetricGoal, MetricInformation, ProblemStatement
+from bbo.shared.base_study_config import ProblemStatement, MetricInformation, ObjectiveMetricGoal
+from bbo.utils.testing import create_dummy_ps, generate_trials, compare_trials
+
+trial_size = 5
+ps, trials, cardinality = create_dummy_ps(trial_size)
+active_trials = generate_trials(ps, trial_size, False)
 
 
 def test_dict_of_2d_array():
@@ -38,42 +40,6 @@ def test_dict_of_2d_array():
     assert array.tolist() == [[1, 2, 5], [3, 4, 6]]
     assert d_2darray.to_dict(array) == d_2darray
 
-
-ps = ProblemStatement()
-ps.search_space.add_float_param('float', 0, 5)
-ps.search_space.add_int_param('int', 3, 7)
-ps.search_space.add_discrete_param('discrete', [1, 3, 5])
-ps.search_space.add_categorical_param('categorical', ['a', 'b'])
-cardinality = dict()
-for type in ['int', 'discrete', 'categorical']:
-    cardinality[type] = len(ps.search_space.get(type).feasible_values)
-ps.metric_information.append(MetricInformation('obj', ObjectiveMetricGoal.MAXIMIZE))
-trial_size = 5
-trials = []
-for _ in range(trial_size):
-    p = ps.search_space.sample()
-    t = Trial(p)
-    t.complete(Measurement({'obj': random.random()}))
-    trials.append(t)
-
-
-def _compare_trials(trials1: Sequence[Trial], trials2: Sequence[Trial]):
-    assert len(trials1) == len(trials2)
-    for t1, t2 in zip(trials1, trials2):
-        param_d1 = t1.parameters.get_float_dict()
-        param_d2 = t2.parameters.get_float_dict()
-        assert param_d1.keys() == param_d2.keys()
-        for k in param_d1.keys():
-            if isinstance(param_d1[k], float):
-                assert math.isclose(param_d1[k], param_d2[k], rel_tol=1e-5)
-            else:
-                assert param_d1[k] == param_d2[k]
-        
-        m_d1 = t1.final_measurement.metrics.get_float_dict()
-        m_d2 = t2.final_measurement.metrics.get_float_dict()
-        assert m_d1.keys() == m_d2.keys()
-        for k in m_d1.keys():
-            assert math.isclose(m_d1[k], m_d2[k], rel_tol=1e-5)
 
 class TestDefaultTrialConverter:
     def test_default(self):
@@ -107,7 +73,13 @@ class TestDefaultTrialConverter:
 
         # check to_trials
         ts = converter.to_trials(x, y)
-        _compare_trials(ts, trials)
+        compare_trials(ts, trials)
+
+    def test_to_trials_without_y(self):
+        converter = DefaultTrialConverter.from_study_config(ps)
+        x = converter.to_features(active_trials)
+        ts = converter.to_trials(x)
+        compare_trials(ts, active_trials)
 
     def test_onehot(self):
         converter = DefaultTrialConverter.from_study_config(ps, onehot_embed=True)
@@ -161,10 +133,51 @@ class TestTrialToArrayConverter:
         assert y.shape == (trial_size, 1)
 
         ts = converter.to_trials(x, y)
-        _compare_trials(ts, trials)
+        compare_trials(ts, trials)
+
+    def test_to_trials_without_y(self):
+        converter = TrialToArrayConverter.from_study_config(ps)
+        x = converter.to_features(active_trials)
+        ts = converter.to_trials(x)
+        compare_trials(ts, active_trials)
 
     def test_onehot(self):
         converter = TrialToArrayConverter.from_study_config(ps, onehot_embed=True)
         x, y = converter.to_xy(trials)
         assert x.shape == (trial_size, 1 + 1 + cardinality['discrete'] + cardinality['categorical'])
         assert y.shape == (trial_size, 1)
+
+
+class TestTrialToTypeArrayConverter:
+    def test_default(self):
+        converter = TrialToTypeArrayConverter.from_study_config(ps)
+        x, y = converter.to_xy(trials)
+        assert x.double.shape == (trial_size, 1)
+        assert x.integer.shape == (trial_size, 1)
+        assert x.discrete.shape == (trial_size, 1)
+        assert x.categorical.shape == (trial_size, 1)
+        assert y.shape == (trial_size, 1)
+        ts = converter.to_trials(x, y)
+        compare_trials(ts, trials)
+
+    def test_to_trials_without_y(self):
+        converter = TrialToTypeArrayConverter.from_study_config(ps)
+        x = converter.to_features(active_trials)
+        ts = converter.to_trials(x)
+        compare_trials(ts, active_trials)
+
+    def test_double_only(self):
+        ps = ProblemStatement()
+        ps.search_space.add_float_param('float1', 0, 5)
+        ps.search_space.add_float_param('float2', 0, 3)
+        ps.metric_information.append(MetricInformation('obj', ObjectiveMetricGoal.MAXIMIZE))
+        trials = generate_trials(ps, trial_size)
+        converter = TrialToTypeArrayConverter.from_study_config(ps)
+        x, y = converter.to_xy(trials)
+        assert x.double.shape == (trial_size, 2)
+        assert x.integer.shape == (trial_size, 0)
+        assert x.discrete.shape == (trial_size, 0)
+        assert x.categorical.shape == (trial_size, 0)
+        assert y.shape == (trial_size, 1)
+        ts = converter.to_trials(x, y)
+        compare_trials(ts, trials)

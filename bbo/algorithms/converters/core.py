@@ -14,10 +14,10 @@
 
 import abc
 import enum
-from typing import Union, Tuple, Optional, Callable, Sequence, List, Dict, Collection
-from collections import UserDict
+from typing import Union, Tuple, Optional, Callable, Sequence, List, Dict, Collection, TypeVar
+from collections import UserDict, defaultdict
 
-from attrs import define, field, validators, evolve
+from attrs import define, field, validators, evolve, asdict
 import numpy as np
 
 from bbo.shared.parameter_config import (
@@ -436,6 +436,17 @@ class TrialConverter(abc.ABC):
         pass
 
 
+def _agg2trials(parameters: List[ParameterDict], measurements: Optional[List[Measurement]] = None) -> List[Trial]:
+    trials = []
+    if measurements is None:
+        return [Trial(p) for p in parameters]
+    else:
+        for p, m in zip(parameters, measurements):
+            t = Trial(p, final_measurement=m)
+            trials.append(t)
+        return trials
+
+
 class DefaultTrialConverter(TrialConverter):
     def __init__(
         self,
@@ -486,17 +497,10 @@ class DefaultTrialConverter(TrialConverter):
                 measurement.metrics[name] = metric
         return measurements
 
-    def to_trials(self, features: Dict[str, np.ndarray], labels: Dict[str, np.ndarray]) -> List[Trial]:
+    def to_trials(self, features: Dict[str, np.ndarray], labels: Optional[Dict[str, np.ndarray]] = None) -> List[Trial]:
         parameters = self.to_parameters(features)
-        measurements = self.to_measurements(labels)
-        return self._agg2trials(parameters, measurements)
-
-    def _agg2trials(self, parameters: List[ParameterDict], measurements: List[Measurement]) -> List[Trial]:
-        trials = []
-        for p, m in zip(parameters, measurements):
-            t = Trial(p, final_measurement=m)
-            trials.append(t)
-        return trials
+        measurements = self.to_measurements(labels) if labels is not None else None
+        return _agg2trials(parameters, measurements)
     
     @classmethod
     def from_study_config(
@@ -556,10 +560,10 @@ class TrialToArrayConverter(TrialConverter):
         d = DictOf2DArray(self._impl.to_labels([]))
         return self._impl.to_measurements(d.to_dict(labels))
 
-    def to_trials(self, features: np.ndarray, labels: np.ndarray) -> List[Trial]:
+    def to_trials(self, features: np.ndarray, labels: Optional[np.ndarray] = None) -> List[Trial]:
         parameters = self.to_parameters(features)
-        measurements = self.to_measurements(labels)
-        return self._impl._agg2trials(parameters, measurements)
+        measurements = self.to_measurements(labels) if labels is not None else None
+        return _agg2trials(parameters, measurements)
 
     @classmethod
     def from_study_config(
@@ -589,3 +593,82 @@ class TrialToArrayConverter(TrialConverter):
     @property
     def metric_information(self) -> Dict[str, MetricInformation]:
         return self._impl.metric_information
+
+
+_T = TypeVar('_T')
+
+@define
+class TypeArray:
+    double: _T
+    integer: _T
+    categorical: _T
+    discrete: _T
+
+
+@define
+class TrialToTypeArrayConverter(TrialConverter):
+    _impl: TrialConverter = field(validator=validators.instance_of(TrialConverter))
+
+    def to_features(self, trials: Sequence[Trial]) -> TypeArray:
+        features = self._impl.to_features(trials)
+        type_dict = {
+            'double': [],
+            'integer': [],
+            'categorical': [],
+            'discrete': []
+        }
+        for name, feature in features.items():
+            t = self._impl.output_specs[name].type.name.lower()
+            type_dict[t].append(feature)
+        for t in type_dict:
+            if type_dict[t]:
+                type_dict[t] = np.concatenate(type_dict[t], axis=-1)
+            else:
+                type_dict[t] = np.zeros((len(trials), 0))
+        return TypeArray(**type_dict)
+    
+    def to_labels(self, trials: Sequence[Trial]) -> np.ndarray:
+        d = DictOf2DArray(self._impl.to_labels(trials))
+        return d.to_array()
+    
+    def to_xy(self, trials: Sequence[Trial]) -> Tuple[TypeArray, np.ndarray]:
+        return self.to_features(trials), self.to_labels(trials)
+
+    def _to_dict_2d_array(self, features: TypeArray) -> Dict[str, np.ndarray]:
+        type_dict = asdict(features)
+        cnt_dict = defaultdict(int)
+        feature_dict = dict()
+        for name, output_spec in self._impl.output_specs.items():
+            t = output_spec.type.name.lower()
+            feature_dict[name] = type_dict[t][:, cnt_dict[t]: cnt_dict[t] + output_spec.num_dimensions]
+            cnt_dict[t] += output_spec.num_dimensions
+        return feature_dict
+    
+    def to_parameters(self, features: TypeArray) -> List[ParameterDict]:
+        return self._impl.to_parameters(self._to_dict_2d_array(features))
+
+    def to_measurements(self, labels: np.ndarray) -> List[Measurement]:
+        d = DictOf2DArray(self._impl.to_labels([]))
+        return self._impl.to_measurements(d.to_dict(labels)) 
+    
+    def to_trials(self, features: TypeArray, labels: Optional[np.ndarray] = None) -> List[Trial]:
+        parameters = self.to_parameters(features)
+        measurements = self.to_measurements(labels) if labels is not None else None
+        return _agg2trials(parameters, measurements)
+
+    @classmethod
+    def from_study_config(
+        cls,
+        study_config: ProblemStatement,
+        float_dtype: np.dtypes = np.float32,
+        int_dtype: np.dtypes = np.int32,
+        scale: bool = True,
+        pad_oovs: bool = False,
+        should_clip: bool = True,
+        max_discrete_indices: int | None = None
+    ):
+        return cls(
+            DefaultTrialConverter.from_study_config(
+                study_config, float_dtype, int_dtype, scale, False, pad_oovs, should_clip, max_discrete_indices
+            )
+        )
