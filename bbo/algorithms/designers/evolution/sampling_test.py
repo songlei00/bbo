@@ -12,30 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import abc
-from typing import TypeVar
+from bbo.algorithms.designers.evolution import templates
+from bbo.algorithms.designers.evolution.sampling import RandomSampler
+from bbo.utils.testing import create_dummy_ps
 
-from bbo.shared.metadata import Metadata
-
-_T = TypeVar('_T')
-
-
-class PartiallySerializable(abc.ABC):
-    @abc.abstractmethod
-    def load(self, metadata: Metadata):
-        pass
-
-    @abc.abstractmethod
-    def dump(self) -> Metadata:
-        pass
+ps, trials, cardinality = create_dummy_ps(5)
 
 
-class Serializable(abc.ABC):
-    @classmethod
-    @abc.abstractmethod
-    def recover(cls: _T, metadata: Metadata) -> _T:
-        pass
-
-    @abc.abstractmethod
-    def dump(self) -> Metadata:
-        pass
+def test_random_sampler():
+    converter = templates.DefaultPopulationConverter(ps)
+    sampler = RandomSampler(converter)
+    pop = sampler(3)
+    assert len(pop) == 3

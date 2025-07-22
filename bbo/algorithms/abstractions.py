@@ -60,7 +60,7 @@ class Designer(abc.ABC):
     def update(
         self,
         completed_trials: CompletedTrials,
-        active_trials: ActiveTrials
+        active_trials: Optional[ActiveTrials] = None
     ) -> None:
         pass
 

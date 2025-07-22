@@ -12,30 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import abc
-from typing import TypeVar
+import numpy as np
+from attrs import define, field, validators
 
-from bbo.shared.metadata import Metadata
-
-_T = TypeVar('_T')
+from bbo.algorithms.designers.evolution import templates
 
 
-class PartiallySerializable(abc.ABC):
-    @abc.abstractmethod
-    def load(self, metadata: Metadata):
-        pass
+@define
+class AgeBasedSurvival(templates.Survival):
+    _target_size: int = field(validator=validators.instance_of(int))
 
-    @abc.abstractmethod
-    def dump(self) -> Metadata:
-        pass
-
-
-class Serializable(abc.ABC):
-    @classmethod
-    @abc.abstractmethod
-    def recover(cls: _T, metadata: Metadata) -> _T:
-        pass
-
-    @abc.abstractmethod
-    def dump(self) -> Metadata:
-        pass
+    def __call__(self, population: templates.Population) -> templates.Population:
+        ages = population.ages
+        indices = np.argsort(ages)[: self._target_size]
+        return population[indices]

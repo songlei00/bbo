@@ -12,30 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import abc
-from typing import TypeVar
+import numpy as np
 
-from bbo.shared.metadata import Metadata
+from bbo.algorithms.designers.evolution import templates
+from bbo.algorithms.designers.evolution.survival import AgeBasedSurvival
+from bbo.utils.testing import create_dummy_ps
 
-_T = TypeVar('_T')
-
-
-class PartiallySerializable(abc.ABC):
-    @abc.abstractmethod
-    def load(self, metadata: Metadata):
-        pass
-
-    @abc.abstractmethod
-    def dump(self) -> Metadata:
-        pass
+ps, trials, cardinality = create_dummy_ps(5)
 
 
-class Serializable(abc.ABC):
-    @classmethod
-    @abc.abstractmethod
-    def recover(cls: _T, metadata: Metadata) -> _T:
-        pass
-
-    @abc.abstractmethod
-    def dump(self) -> Metadata:
-        pass
+def test_age_based_survival():
+    converter = templates.DefaultPopulationConverter(ps)
+    pop = converter.to_population(trials)
+    pop.ages = np.array([3, 2, 1, 5, 4])
+    survival = AgeBasedSurvival(3)
+    pop = survival(pop)
+    assert len(pop) == 3
+    assert np.all(pop.ages != 5) and np.all(pop.ages !=4)

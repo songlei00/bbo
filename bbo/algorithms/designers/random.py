@@ -37,5 +37,5 @@ class RandomDesigner(Designer):
             suggestions.append(Trial(parameters=sample))
         return suggestions
 
-    def update(self, completed_trials: CompletedTrials, active_trials: ActiveTrials):
+    def update(self, completed_trials: CompletedTrials, active_trials: Optional[ActiveTrials] = None):
         pass

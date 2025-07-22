@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import functools
-from typing import Sequence, Callable, Dict
+from typing import Sequence, Callable, Dict, Optional
 
 import numpy as np
 
@@ -26,7 +26,9 @@ argmin = functools.partial(arg_operator, operator=min)
 argmax = functools.partial(arg_operator, operator=max)
 
 
-def eq_dict_of_ndarray(d1: Dict[str, np.ndarray], d2: Dict[str, np.ndarray]):
+def eq_dict_of_ndarray(d1: Optional[Dict[str, np.ndarray]], d2: Optional[Dict[str, np.ndarray]]):
+    if d1 is None or d2 is None:
+        return d1 is None and d2 is None
     if len(d1) != len(d2):
         return False
     for key in d1:
