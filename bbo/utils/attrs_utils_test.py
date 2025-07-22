@@ -14,6 +14,7 @@
 
 import pytest
 from attrs import define, field
+import numpy as np
 
 from bbo.utils import attrs_utils
 
@@ -54,4 +55,27 @@ def test_assert_not_negative(validator, value, result: bool):
     ]
 )
 def test_assert_bounds(validator, value, result: bool):
+    assertValidatorWorksAsIntended(validator, value, result)
+
+
+@pytest.mark.parametrize(
+    'validator, value, result', [
+        (attrs_utils.assert_positive, -1, False),
+        (attrs_utils.assert_positive, 0, False),
+        (attrs_utils.assert_positive, 1, True),
+        (attrs_utils.assert_positive, 0.1, True)
+    ]
+)
+def test_assert_positive(validator, value, result: bool):
+    assertValidatorWorksAsIntended(validator, value, result)
+
+
+@pytest.mark.parametrize(
+    'validator, value, result', [
+        (attrs_utils.shape_equals(lambda x: (len(x), None)), np.zeros((3, 5)), True),
+        (attrs_utils.shape_equals(lambda x: (len(x), )), np.zeros((3, 5)), False),
+        (attrs_utils.shape_equals(lambda x: (len(x), )), np.zeros((3, )), True),
+    ]
+)
+def test_shape_equals(validator, value, result: bool):
     assertValidatorWorksAsIntended(validator, value, result)

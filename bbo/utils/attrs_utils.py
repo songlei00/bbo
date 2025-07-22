@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Union, Tuple
+from typing import Any, Union, Tuple, Callable, Optional, Collection
 
 import attrs
 
@@ -22,6 +22,11 @@ def assert_not_negative(instance: Any, attribute: attrs.Attribute, value: Union[
         raise ValueError(f'{attribute.name} must be non-negative in {instance}')
 
 
+def assert_positive(instance: Any, attribute: attrs.Attribute, value: Union[float, int]):
+    if value <= 0:
+        raise ValueError(f'{attribute.name} must be positive in {instance}')
+
+
 def assert_bounds(instance: Any, attribute: attrs.Attribute, value: Union[Tuple[float, float], Tuple[int, int]]):
     if len(value) != 2:
         raise ValueError(f'{attribute.name} must be a tuple of length 2. Given {value}')
@@ -29,3 +34,24 @@ def assert_bounds(instance: Any, attribute: attrs.Attribute, value: Union[Tuple[
         raise ValueError(f'{attribute.name} must be a tuple of numbers. Given {value}')
     if value[0] > value[1]:
         raise ValueError(f'Low bound must be less than high bound. Given {value}')
+
+
+def shape_equals(instance_to_shape: Callable[[Any], Collection[Optional[int]]]):
+    def validator(instance, attribute, value) -> None:
+        shape = instance_to_shape(value)
+
+        def _validator_boolean():
+            if len(value.shape) != len(shape):
+                return False
+            for s1, s2 in zip(value.shape, shape):
+                if (s2 is not None) and (s1 != s2):
+                    return False
+            return True
+
+        if not _validator_boolean():
+            raise ValueError(
+                f'{attribute.name} has shape {value.shape} '
+                f'which does not match the expected shape {shape}'
+            )
+
+    return validator
