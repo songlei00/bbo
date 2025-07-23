@@ -24,6 +24,7 @@ class RandomSampler(templates.Sampler):
     _converter: templates.PopulationConverter = field(
         validator=validators.instance_of(templates.PopulationConverter)
     )
+    _rng: np.random.Generator = field(validator=validators.instance_of(np.random.Generator))
 
     def __call__(self, count: int) -> templates.Population:
         output_specs = self._converter.trial_converter.output_specs
@@ -32,11 +33,11 @@ class RandomSampler(templates.Sampler):
             lb, ub = output_spec.bounds
             shape = (count, 1)
             if output_spec.type == NumpyArraySpecType.DOUBLE:
-                xs[name] = np.random.rand(*shape) * (ub - lb) + lb
+                xs[name] = self._rng.random(shape, output_spec.dtype) * (ub - lb) + lb
             elif output_spec.type in (
                 NumpyArraySpecType.INTEGER,
                 NumpyArraySpecType.DISCRETE,
                 NumpyArraySpecType.CATEGORICAL
             ):
-                xs[name] = np.random.randint(lb, ub+1, shape)
+                xs[name] = self._rng.integers(lb, ub+1, shape, output_spec.dtype)
         return templates.Population(xs)

@@ -13,20 +13,10 @@
 # limitations under the License.
 
 import numpy as np
-from attrs import define, field, validators
-
-from bbo.algorithms.designers.evolution import templates
 
 
-@define
-class AgeBasedSurvival(templates.Survival):
-    _target_size: int = field(validator=validators.instance_of(int))
-    _is_ordered: bool = field(default=False)
-
-    def __call__(self, population: templates.Population) -> templates.Population:
-        if self._is_ordered:
-            return population[-self._target_size: ]
-        else:
-            ages = population.ages
-            indices = np.argsort(ages, stable=True)[: self._target_size]
-            return population[indices]
+def get_rng(seed_or_rng: np.random.Generator | int | None) -> np.random.Generator:
+    if isinstance(seed_or_rng, np.random.Generator):
+        return seed_or_rng
+    else:
+        return np.random.default_rng(seed_or_rng)

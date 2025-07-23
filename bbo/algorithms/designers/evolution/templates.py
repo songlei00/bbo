@@ -14,7 +14,7 @@
 
 import abc
 import json
-from typing import Optional, Dict, List, Sequence, Optional
+from typing import Optional, Dict, List, Sequence
 
 import numpy as np
 from attrs import define, field, validators, asdict
@@ -265,7 +265,7 @@ class CanonicalEvolutionDesigner(PartiallySerializableDesigner, abc.ABC):
     def suggest(self, count: Optional[int] = None) -> Sequence[Trial]:
         count = count or self.offspring_size
         if len(self._population) < self.pop_size:
-            ret = self.sampling(self.pop_size - len(self._population))
+            ret = self.sampling(count)
             return self._converter.to_trials(ret)
 
         selected = self.selection(self._population)
@@ -275,7 +275,6 @@ class CanonicalEvolutionDesigner(PartiallySerializableDesigner, abc.ABC):
             selected = self.crossover(selected)
         if self.mutation is not None:
             selected = self.mutation(selected)
-
         return self._converter.to_trials(selected)
     
     def update(self, completed: CompletedTrials, active: Optional[ActiveTrials] = None):

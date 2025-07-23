@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
-import copy
-
 import numpy as np
 from attrs import define, field, validators
 
@@ -28,6 +25,7 @@ class RandomMutation(templates.Mutation):
     _converter: templates.PopulationConverter = field(
         validator=validators.instance_of(templates.PopulationConverter)
     )
+    _rng: np.random.Generator = field(validator=validators.instance_of(np.random.Generator))
     _k: int = field(
        default=1,
        validator=validators.and_(validators.instance_of(int), attrs_utils.assert_positive)
@@ -35,20 +33,23 @@ class RandomMutation(templates.Mutation):
     
     def __call__(self, population: templates.Population) -> templates.Population:
         assert len(population) == 1
-        ret = copy.deepcopy(population)
-        ret.ages[0] = 0
+        ret = templates.Population(population.xs.copy(), generations=population.generations.copy())
         output_specs = self._converter.trial_converter.output_specs
-        keys = random.sample(list(population.xs), k=self._k)
+        keys = self._rng.choice(list(population.xs), size=self._k, replace=False)
         for k in keys:
             output_spec = output_specs[k]
             lb, ub = output_spec.bounds
             shape = (1, 1)
             if output_spec.type == NumpyArraySpecType.DOUBLE:
-                ret.xs[k] = np.random.rand(*shape) * (ub - lb) + lb
+                ret.xs[k] = self._rng.random(shape, output_spec.dtype) * (ub - lb) + lb
             elif output_spec.type in (
                 NumpyArraySpecType.INTEGER,
                 NumpyArraySpecType.DISCRETE,
                 NumpyArraySpecType.CATEGORICAL
             ):
-                ret.xs[k] = np.random.randint(lb, ub+1, shape)
+                while True:
+                    sampled_v = self._rng.integers(lb, ub+1, shape, output_spec.dtype)
+                    if sampled_v != ret.xs[k]:
+                        ret.xs[k] = sampled_v
+                        break
         return ret

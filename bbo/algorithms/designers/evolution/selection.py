@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
 from typing import Optional
 
 import numpy as np
@@ -24,9 +23,11 @@ from bbo.shared.base_study_config import ObjectiveMetricGoal
 
 @define
 class RandomSelection(templates.Selection):
+    _rng: np.random.Generator = field(validator=validators.instance_of(np.random.Generator))
+
     def __call__(self, population: templates.Population, count: Optional[int] = None) -> templates.Population:
         count = count or 1
-        indices = random.sample(range(len(population)), k=count)
+        indices = self._rng.choice(len(population), size=count, replace=False)
         return population[indices]
 
 
@@ -34,9 +35,10 @@ class RandomSelection(templates.Selection):
 class TournamentSelection(templates.Selection):
     _tournament_size: int = field(validator=validators.instance_of(int))
     _goal: ObjectiveMetricGoal = field(validator=validators.instance_of(ObjectiveMetricGoal))
+    _rng: np.random.Generator = field(validator=validators.instance_of(np.random.Generator))
 
     def __call__(self, population: templates.Population) -> templates.Population:
-        indices = random.sample(range(len(population)), k=self._tournament_size)
+        indices = self._rng.choice(len(population), size=self._tournament_size, replace=False)
         candidates = population[indices]
         ys = candidates.y_item()
         if self._goal.is_maximize:

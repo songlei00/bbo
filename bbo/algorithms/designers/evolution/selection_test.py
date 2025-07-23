@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pytest
+import numpy as np
 
 from bbo.algorithms.designers.evolution import templates
 from bbo.algorithms.designers.evolution.selection import (
@@ -29,14 +30,16 @@ population = converter.to_population(trials)
 
 @pytest.mark.parametrize('size', [1, 3])
 def test_random_selection(size):
-    selection = RandomSelection()
+    rng = np.random.default_rng()
+    selection = RandomSelection(rng)
     selected = selection(population, size)
     assert len(selected) == size
 
 
 @pytest.mark.parametrize('tournament_size', [1, 3, 5])
 def test_tournament_selection(tournament_size):
-    selection = TournamentSelection(tournament_size, ObjectiveMetricGoal.MAXIMIZE)
+    rng = np.random.default_rng()
+    selection = TournamentSelection(tournament_size, ObjectiveMetricGoal.MAXIMIZE, rng)
     selected = selection(population)
     assert len(selected) == 1
     selected_y = selected.y_item().item()
