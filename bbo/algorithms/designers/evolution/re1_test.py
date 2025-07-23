@@ -15,15 +15,18 @@
 import pytest
 import numpy as np
 
+from bbo.algorithms.designers.evolution.re1 import RegularizedEvolutionDesigner1
 from bbo.shared.base_study_config import ObjectiveMetricGoal
 from bbo.algorithms.converters.core import DefaultTrialConverter
 from bbo.algorithms.designers.evolution.re1 import (
     tournament_selection,
     random_mutation
 )
-from bbo.utils.testing import create_dummy_ps
+from bbo.benchmarks.experimenters.synthetic.branin import Branin2DExperimenter
+from bbo.algorithms.abstractions import CompletedTrials
+from bbo.utils import testing
 
-ps, trials, cardinality = create_dummy_ps(5)
+ps, trials, cardinality = testing.create_dummy_ps(5)
 
 
 @pytest.mark.parametrize('tournament_size', [1, 3, 5])
@@ -43,3 +46,38 @@ def test_random_mutation(k):
     x1 = converter.to_features([trials[0]])
     x2 = converter.to_features([trial])
     assert sum([x1[k] != x2[k] for k in x1.keys()]) == k
+
+
+@pytest.mark.parametrize(
+    'first_iterations, second_iterations', [
+        (10, 30),
+        (30, 20)
+    ]
+)
+def test_serialize(first_iterations, second_iterations):
+    exp = Branin2DExperimenter()
+    branin2_ps = exp.problem_statement()
+    designer = RegularizedEvolutionDesigner1(branin2_ps)
+    for _ in range(first_iterations):
+        suggestions = designer.suggest()
+        exp.evaluate(suggestions)
+        designer.update(CompletedTrials(suggestions))
+
+    encoded = designer.dump()
+    trails = []
+    for _ in range(second_iterations):
+        suggestions = designer.suggest()
+        exp.evaluate(suggestions)
+        designer.update(CompletedTrials(suggestions))
+        trails.extend(suggestions)
+
+    recovered_designer = RegularizedEvolutionDesigner1(branin2_ps)
+    recovered_designer.load(encoded)
+    recovered_trails = []
+    for _ in range(second_iterations):
+        suggestions = recovered_designer.suggest()
+        exp.evaluate(suggestions)
+        recovered_designer.update(CompletedTrials(suggestions))
+        recovered_trails.extend(suggestions)
+
+    testing.compare_trials_xy(trails, recovered_trails)

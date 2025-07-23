@@ -137,7 +137,7 @@ class Measurement:
     metadata: Metadata = field(
         factory=Metadata,
         validator=validators.instance_of(Metadata),
-        init=False
+        kw_only=True
     )
 
 

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from bbo.algorithms.converters.torch_converter import TrialToTorchConverter
-from bbo.algorithms.converters.core_test import compare_trials, create_dummy_ps, generate_trials
+from bbo.algorithms.converters.core_test import compare_trials_xy, create_dummy_ps, generate_trials
 
 trial_size = 5
 ps, trials, cardinality = create_dummy_ps(trial_size)
@@ -30,10 +30,10 @@ class TestTrialToTorchConverter:
         assert x.categorical.shape == (trial_size, 1)
         assert y.shape == (trial_size, 1)
         ts = converter.to_trials(x, y)
-        compare_trials(ts, trials)
+        compare_trials_xy(ts, trials)
 
     def test_to_trials_without_y(self):
         converter = TrialToTorchConverter.from_study_config(ps)
         x = converter.to_features(active_trials)
         ts = converter.to_trials(x)
-        compare_trials(ts, active_trials)
+        compare_trials_xy(ts, active_trials)

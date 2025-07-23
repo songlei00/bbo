@@ -24,7 +24,7 @@ from bbo.algorithms.converters.core import (
     TrialToTypeArrayConverter
 )
 from bbo.shared.base_study_config import ProblemStatement, MetricInformation, ObjectiveMetricGoal
-from bbo.utils.testing import create_dummy_ps, generate_trials, compare_trials
+from bbo.utils.testing import create_dummy_ps, generate_trials, compare_trials_xy
 
 trial_size = 5
 ps, trials, cardinality = create_dummy_ps(trial_size)
@@ -73,13 +73,13 @@ class TestDefaultTrialConverter:
 
         # check to_trials
         ts = converter.to_trials(x, y)
-        compare_trials(ts, trials)
+        compare_trials_xy(ts, trials)
 
     def test_to_trials_without_y(self):
         converter = DefaultTrialConverter.from_study_config(ps)
         x = converter.to_features(active_trials)
         ts = converter.to_trials(x)
-        compare_trials(ts, active_trials)
+        compare_trials_xy(ts, active_trials)
 
     def test_onehot(self):
         converter = DefaultTrialConverter.from_study_config(ps, onehot_embed=True)
@@ -133,13 +133,13 @@ class TestTrialToArrayConverter:
         assert y.shape == (trial_size, 1)
 
         ts = converter.to_trials(x, y)
-        compare_trials(ts, trials)
+        compare_trials_xy(ts, trials)
 
     def test_to_trials_without_y(self):
         converter = TrialToArrayConverter.from_study_config(ps)
         x = converter.to_features(active_trials)
         ts = converter.to_trials(x)
-        compare_trials(ts, active_trials)
+        compare_trials_xy(ts, active_trials)
 
     def test_onehot(self):
         converter = TrialToArrayConverter.from_study_config(ps, onehot_embed=True)
@@ -158,13 +158,13 @@ class TestTrialToTypeArrayConverter:
         assert x.categorical.shape == (trial_size, 1)
         assert y.shape == (trial_size, 1)
         ts = converter.to_trials(x, y)
-        compare_trials(ts, trials)
+        compare_trials_xy(ts, trials)
 
     def test_to_trials_without_y(self):
         converter = TrialToTypeArrayConverter.from_study_config(ps)
         x = converter.to_features(active_trials)
         ts = converter.to_trials(x)
-        compare_trials(ts, active_trials)
+        compare_trials_xy(ts, active_trials)
 
     def test_double_only(self):
         ps = ProblemStatement()
@@ -180,4 +180,4 @@ class TestTrialToTypeArrayConverter:
         assert x.categorical.shape == (trial_size, 0)
         assert y.shape == (trial_size, 1)
         ts = converter.to_trials(x, y)
-        compare_trials(ts, trials)
+        compare_trials_xy(ts, trials)

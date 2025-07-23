@@ -17,7 +17,7 @@ from collections import deque
 from typing import Optional, Sequence
 
 import numpy as np
-from attrs import define, field, validators, asdict
+from attrs import define, field, validators
 
 from bbo.shared.base_study_config import ProblemStatement, ObjectiveMetricGoal
 from bbo.algorithms.abstractions import PartiallySerializableDesigner, CompletedTrials, ActiveTrials
@@ -25,7 +25,7 @@ from bbo.algorithms.designers.random import RandomDesigner
 from bbo.algorithms.converters.core import DefaultTrialConverter, TrialConverter, NumpyArraySpecType
 from bbo.shared.trial import Trial
 from bbo.shared.metadata import Metadata
-from bbo.utils import get_rng
+from bbo.utils import get_rng, json_utils
 
 
 def tournament_selection(
@@ -65,11 +65,12 @@ def random_mutation(
             NumpyArraySpecType.DISCRETE,
             NumpyArraySpecType.CATEGORICAL
         ):
-            while True:
-                sampled_v = rng.integers(lb, ub+1, shape, output_spec.dtype)
-                if sampled_v != sample[k]:
-                    sample[k] = sampled_v
-                    break
+            if lb != ub:
+                while True:
+                    sampled_v = rng.integers(lb, ub+1, shape, output_spec.dtype)
+                    if sampled_v != sample[k]:
+                        sample[k] = sampled_v
+                        break
     ret = [Trial(p) for p in converter.to_parameters(sample)]
     assert len(ret) == 1
     return ret[0]
@@ -118,10 +119,13 @@ class RegularizedEvolutionDesigner1(PartiallySerializableDesigner):
     def load(self, metadata: Metadata):
         self._rng = np.random.Generator(np.random.PCG64())
         self._rng.bit_generator.state = json.loads(metadata['rng'])
-        self._population = deque(json.loads(metadata['population']))
+        self._population = deque(
+            json.loads(metadata['population'], object_hook=json_utils.trial_hook),
+            maxlen=self._pop_size
+        )
         self._init_designer._rng = self._rng
 
     def dump(self) -> Metadata:
         rng_encoded = json.dumps(self._rng.bit_generator.state)
-        population_encoded = json.dumps(list(self._population))
+        population_encoded = json.dumps(list(self._population), cls=json_utils.TrialEncoder)
         return Metadata({'population': population_encoded, 'rng': rng_encoded})

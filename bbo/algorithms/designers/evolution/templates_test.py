@@ -76,10 +76,10 @@ class TestDefaultPopulationConverter:
         converter = templates.DefaultPopulationConverter(ps)
         pop = converter.to_population(trials)
         recovered = converter.to_trials(pop)
-        testing.compare_trials(trials, recovered)
+        testing.compare_trials_xy(trials, recovered)
 
     def test_without_y(self):
         converter = templates.DefaultPopulationConverter(ps)
         pop = converter.to_population(active_trials)
         recovered = converter.to_trials(pop)
-        testing.compare_trials(active_trials, recovered)
+        testing.compare_trials_xy(active_trials, recovered)

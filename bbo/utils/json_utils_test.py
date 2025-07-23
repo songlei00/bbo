@@ -16,7 +16,9 @@ import json
 import pytest
 import numpy as np
 
-from bbo.utils.json_utils import NumpyEncoder, numpy_hook
+from bbo.shared.trial import Trial, Measurement
+from bbo.shared.metadata import Metadata
+from bbo.utils.json_utils import NumpyEncoder, numpy_hook, TrialEncoder, trial_hook
 
 
 @pytest.mark.parametrize('shape', [(3, 0), (3, 5)])
@@ -31,3 +33,18 @@ def test_numpy_serialize(shape):
     assert np.allclose(data['b'], loaded['b'], 1e-5)
     assert data['b'].dtype == loaded['b'].dtype
     assert data['b'].shape == loaded['b'].shape
+
+
+def test_trial_serialize():
+    metadata = Metadata()
+    metadata['a'] = 1
+    metadata.ns('ns')['b'] = 2
+    metadata.ns('ns').ns('ns')['c'] = 3
+    trial = Trial(
+        parameters={'x1': 1, 'x2': 2},
+        final_measurement=Measurement({'y1': 1, 'y2': 2}),
+        metadata=metadata
+    )
+    dumped = json.dumps(trial, cls=TrialEncoder)
+    loaded = json.loads(dumped, object_hook=trial_hook)
+    assert loaded == trial

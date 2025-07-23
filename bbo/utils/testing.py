@@ -46,7 +46,7 @@ def create_dummy_ps(size: int):
     return ps, trials, cardinality
 
 
-def compare_trials(trials1: Sequence[Trial], trials2: Sequence[Trial]):
+def compare_trials_xy(trials1: Sequence[Trial], trials2: Sequence[Trial]):
     assert len(trials1) == len(trials2)
     for t1, t2 in zip(trials1, trials2):
         param_d1 = t1.parameters.get_float_dict()

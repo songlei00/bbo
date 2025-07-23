@@ -47,9 +47,10 @@ class RandomMutation(templates.Mutation):
                 NumpyArraySpecType.DISCRETE,
                 NumpyArraySpecType.CATEGORICAL
             ):
-                while True:
-                    sampled_v = self._rng.integers(lb, ub+1, shape, output_spec.dtype)
-                    if sampled_v != ret.xs[k]:
-                        ret.xs[k] = sampled_v
-                        break
+                if lb != ub:
+                    while True:
+                        sampled_v = self._rng.integers(lb, ub+1, shape, output_spec.dtype)
+                        if sampled_v != ret.xs[k]:
+                            ret.xs[k] = sampled_v
+                            break
         return ret
