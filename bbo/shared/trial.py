@@ -128,7 +128,7 @@ class Measurement:
         validator=validators.instance_of(MetricDict),
         converter=MetricDict
     )
-    elasped_secs: float = field(
+    elapsed_secs: float = field(
         default=0,
         converter=float,
         validator=attrs_utils.assert_not_negative,
