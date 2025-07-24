@@ -22,7 +22,7 @@ from bbo.algorithms.designers.evolution.re1 import (
     tournament_selection,
     random_mutation
 )
-from bbo.benchmarks.experimenters.synthetic.branin import Branin2DExperimenter
+from bbo.benchmarks.experimenters import synthetic
 from bbo.algorithms.abstractions import CompletedTrials
 from bbo.utils import testing
 
@@ -55,7 +55,7 @@ def test_random_mutation(k):
     ]
 )
 def test_serialize(first_iterations, second_iterations):
-    exp = Branin2DExperimenter()
+    exp = synthetic.SyntheticExperimenter(synthetic.Branin2D())
     branin2_ps = exp.problem_statement()
     designer = RegularizedEvolutionDesigner1(branin2_ps)
     for _ in range(first_iterations):
