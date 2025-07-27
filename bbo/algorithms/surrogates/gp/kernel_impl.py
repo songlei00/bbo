@@ -1,3 +1,17 @@
+# Copyright 2025 songlei
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import functools
 import math
 from typing import Protocol, Union
@@ -61,7 +75,7 @@ def cov_matrix_vmap_3d(cov_fn: KernelProtocol):
         return torch.vmap(lambda X1, X2: cov_matrix(X1, X2, *args, **kwargs))(X1, X2)
     return batch_cov_matrix
 
-def _rbf(
+def _rbf_vmap(
     X1: torch.Tensor,
     X2: torch.Tensor,
     lengthscale: Union[float, torch.Tensor]
@@ -69,7 +83,7 @@ def _rbf(
     r2 = torch.sum(((X1 - X2) / (lengthscale)) ** 2)
     return _rbf_impl(r2)
 
-def _matern52(
+def _matern52_vmap(
     X1: torch.Tensor,
     X2: torch.Tensor,
     lengthscale: Union[float, torch.Tensor]
@@ -79,7 +93,7 @@ def _matern52(
     r = math.sqrt(5) * dist
     return _matern52_impl(r)
 
-rbf_vmap_2d = cov_matrix_vmap_2d(_rbf)
-rbf_vmap_3d = cov_matrix_vmap_3d(_rbf)
-matern52_vmap_2d = cov_matrix_vmap_2d(_matern52)
-matern52_vmap_3d = cov_matrix_vmap_3d(_matern52)
+rbf_vmap_2d = cov_matrix_vmap_2d(_rbf_vmap)
+rbf_vmap_3d = cov_matrix_vmap_3d(_rbf_vmap)
+matern52_vmap_2d = cov_matrix_vmap_2d(_matern52_vmap)
+matern52_vmap_3d = cov_matrix_vmap_3d(_matern52_vmap)
