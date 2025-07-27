@@ -15,6 +15,7 @@
 from typing import Any, Union, Tuple, Callable, Optional, Collection
 
 import attrs
+import torch
 
 
 def assert_not_negative(instance: Any, attribute: attrs.Attribute, value: Union[float, int]):
@@ -55,3 +56,10 @@ def shape_equals(instance_to_shape: Callable[[Any], Collection[Optional[int]]]):
             )
 
     return validator
+
+
+def assert_2dtensor(instance, attribute, value):
+    if not isinstance(value, torch.Tensor):
+        raise TypeError(f"Expected Tensor, got {type(value)}")
+    if value.dim() != 2:
+        raise ValueError(f"Expected 2D Tensor, got {value.dim()}D Tensor")

@@ -14,7 +14,7 @@
 
 import abc
 import enum
-from typing import Union, Tuple, Optional, Callable, Sequence, List, Dict, Collection, TypeVar
+from typing import Union, Tuple, Optional, Callable, Sequence, List, Dict, Collection, TypeVar, Generic
 from collections import UserDict, defaultdict
 
 from attrs import define, field, validators, evolve, asdict
@@ -598,7 +598,7 @@ class TrialToArrayConverter(TrialConverter):
 _T = TypeVar('_T')
 
 @define
-class TypeArray:
+class TypeArray(Generic[_T]):
     double: _T
     integer: _T
     categorical: _T

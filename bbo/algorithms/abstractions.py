@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import abc
-from typing import Optional, Sequence
+from typing import Optional, Sequence, TypeVar
 
 from attrs import define, field, validators
 
@@ -71,3 +71,15 @@ class PartiallySerializableDesigner(Designer, PartiallySerializable):
 
 class SerializableDesigner(Designer, Serializable):
     pass
+
+
+_T = TypeVar('_T')
+
+class Surrogate(abc.ABC):
+    @abc.abstractmethod
+    def train(self, X: _T, Y: _T):
+        pass
+
+    @abc.abstractmethod
+    def predict(self, X: _T):
+        pass
