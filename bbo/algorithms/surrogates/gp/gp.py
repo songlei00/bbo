@@ -65,6 +65,8 @@ class GP(Surrogate):
         chol, kinv = self._cached_chol, self._cached_kinvy
         cov = self._cov_module(query_X, self._X)
         mu = self._mean_module(query_X) + cov @ kinv
-        v = torch.linalg.solve_triangular(chol, cov.T, upper=False)
-        var = self._cov_module(query_X, query_X) - v.T @ v
+        if cov.ndim == 3:
+            chol = chol.unsqueeze(0)
+        v = torch.linalg.solve_triangular(chol, cov.transpose(-2, -1), upper=False)
+        var = self._cov_module(query_X, query_X) - v.transpose(-2, -1) @ v
         return mu, var

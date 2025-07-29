@@ -36,40 +36,34 @@ def _naive_matern52_impl(X1, X2, lengthscale=1.0):
 
 
 @pytest.mark.parametrize("naive_impl, fast_impl", [
-    (_naive_rbf_impl, kernel_impl.rbf_vmap_2d),
-    (_naive_matern52_impl, kernel_impl.matern52_vmap_2d),
+    (_naive_rbf_impl, kernel_impl.rbf_vmap),
+    (_naive_matern52_impl, kernel_impl.matern52_vmap),
     (_naive_rbf_impl, kernel_impl.rbf_cdist),
     (_naive_matern52_impl, kernel_impl.matern52_cdist)
 ])
-def test_kernel_2d(naive_impl, fast_impl):
-    X1 = torch.randn((n1, d))
-    X2 = torch.randn((n2, d))
-    lengthscale = F.softplus(torch.randn(()))
-    K = fast_impl(X1, X2, lengthscale)
-    ref_K = naive_impl(X1, X2, lengthscale)
-    assert K.shape == (n1, n2)
-    assert torch.allclose(K, ref_K)
+class TestKernelImplRun:
+    def test_kernel_2d(self, naive_impl, fast_impl):
+        X1 = torch.randn((n1, d))
+        X2 = torch.randn((n2, d))
+        lengthscale = F.softplus(torch.randn(()))
+        K = fast_impl(X1, X2, lengthscale)
+        ref_K = naive_impl(X1, X2, lengthscale)
+        assert K.shape == (n1, n2)
+        assert torch.allclose(K, ref_K)
 
-
-@pytest.mark.parametrize("naive_impl, fast_impl", [
-    (_naive_rbf_impl, kernel_impl.rbf_vmap_3d),
-    (_naive_matern52_impl, kernel_impl.matern52_vmap_3d),
-    (_naive_rbf_impl, kernel_impl.rbf_cdist),
-    (_naive_matern52_impl, kernel_impl.matern52_cdist)
-])
-def test_kernel_3d(naive_impl, fast_impl):
-    X1 = torch.randn((bs, n1, d))
-    X2 = torch.randn((bs, n2, d))
-    lengthscale = F.softplus(torch.randn(()))
-    K = fast_impl(X1, X2, lengthscale)
-    ref_K = naive_impl(X1, X2, lengthscale)
-    assert K.shape == (bs, n1, n2)
-    assert torch.allclose(K, ref_K)
+    def test_kernel_3d(self, naive_impl, fast_impl):
+        X1 = torch.randn((bs, n1, d))
+        X2 = torch.randn((bs, n2, d))
+        lengthscale = F.softplus(torch.randn(()))
+        K = fast_impl(X1, X2, lengthscale)
+        ref_K = naive_impl(X1, X2, lengthscale)
+        assert K.shape == (bs, n1, n2)
+        assert torch.allclose(K, ref_K)
 
 
 @pytest.mark.parametrize("fast_impl", [
-    kernel_impl.rbf_vmap_2d,
-    kernel_impl.matern52_vmap_2d,
+    kernel_impl.rbf_vmap,
+    kernel_impl.matern52_vmap,
     kernel_impl.rbf_cdist,
     kernel_impl.matern52_cdist
 ])

@@ -22,5 +22,4 @@ class ConstantMean(nn.Module):
         self.constant = nn.Parameter(torch.zeros(()))
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        n = X.shape[0]
-        return self.constant.expand(n, 1)
+        return self.constant.expand(*X.shape[:-1], 1)

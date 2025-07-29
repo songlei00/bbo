@@ -30,6 +30,4 @@ def test_random_mutation():
     pop = sampler(1)
     new_pop = mutation(pop)
     assert len(new_pop) == 1
-    print(new_pop.xs)
-    print(pop.xs)
     assert sum([not np.allclose(new_pop.xs[k], pop.xs[k]) for k in new_pop.xs]) == 1

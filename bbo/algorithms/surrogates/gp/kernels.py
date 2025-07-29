@@ -37,8 +37,8 @@ class TemplateKernel(nn.Module):
         return self.impl(X1, X2, lengthscale)
     
 
-RBFKernel = functools.partial(TemplateKernel, impl=kernel_impl.rbf_vmap_2d)
-Matern52Kernel = functools.partial(TemplateKernel, impl=kernel_impl.matern52_vmap_2d)
+RBFKernel = functools.partial(TemplateKernel, impl=kernel_impl.rbf_vmap)
+Matern52Kernel = functools.partial(TemplateKernel, impl=kernel_impl.matern52_vmap)
 
 
 class ScaleKernel(nn.Module):

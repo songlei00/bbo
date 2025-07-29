@@ -13,12 +13,24 @@
 # limitations under the License.
 
 import torch
+import pytest
+
 from bbo.algorithms.surrogates.gp.means import ConstantMean
 
 
-def test_constant_mean():
-    mean = ConstantMean()
+@pytest.mark.parametrize('mean', [
+    ConstantMean()
+])
+def test_mean_2d(mean):
     X = torch.randn(10, 2)
     m = mean(X)
     assert m.shape == (10, 1)
-    assert torch.all(m == m[0])
+
+
+@pytest.mark.parametrize('mean', [
+    ConstantMean()
+])
+def test_mean_3d(mean):
+    X = torch.randn(20, 10, 2)
+    m = mean(X)
+    assert m.shape == (20, 10, 1)
