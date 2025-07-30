@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
+from typing import Sequence
+
 import pytest
 
 from bbo.shared.base_study_config import ProblemStatement, MetricInformation, ObjectiveMetricGoal
@@ -23,7 +26,8 @@ from bbo.shared.trial import (
     Trial,
     Measurement,
     TrialStatus,
-    trial_is_better_than
+    trial_is_better_than,
+    get_best_trials
 )
 
 
@@ -120,3 +124,30 @@ def test_trial_is_better_than(
     expected: bool
 ):
     assert trial_is_better_than(trial1, trial2, ps) == expected
+
+
+class TestGetBestTrials:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ps_max = ProblemStatement(metric_information=[
+            MetricInformation(name='obj', goal=ObjectiveMetricGoal.MAXIMIZE)
+        ])
+        self.ps_min = ProblemStatement(metric_information=[
+            MetricInformation(name='obj', goal=ObjectiveMetricGoal.MINIMIZE)
+        ])
+        self.trials = [
+            Trial({}, final_measurement=Measurement({'obj': i})) for i in range(10)
+        ]
+        random.shuffle(self.trials)
+
+    def test_get_best_trials_max(self):
+        best_trials = get_best_trials(self.trials, self.ps_max, count=2)
+        assert len(best_trials) == 2
+        assert best_trials[0].final_measurement.metrics['obj'].value == 9
+        assert best_trials[1].final_measurement.metrics['obj'].value == 8
+
+    def test_get_best_trials_min(self):
+        best_trials = get_best_trials(self.trials, self.ps_min, count=2)
+        assert len(best_trials) == 2
+        assert best_trials[0].final_measurement.metrics['obj'].value == 0
+        assert best_trials[1].final_measurement.metrics['obj'].value == 1

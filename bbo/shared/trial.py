@@ -14,7 +14,7 @@
 
 import enum
 import datetime
-from typing import Union, Optional, Dict, List
+from typing import Union, Optional, Dict, List, Sequence
 from collections import UserDict
 
 from attrs import define, field, validators
@@ -273,3 +273,23 @@ def trial_is_better_than(
         return trial1.final_measurement.metrics[metric_info.name].value > trial2.final_measurement.metrics[metric_info.name].value
     else:
         return trial1.final_measurement.metrics[metric_info.name].value < trial2.final_measurement.metrics[metric_info.name].value
+    
+
+def get_best_trials(
+    trials: Sequence[Trial],
+    problem_statement,
+    *,
+    count: int = 1
+):
+    metric_info = problem_statement.metric_information_item()
+    values = [
+        trial.final_measurement.metrics[metric_info.name].value
+        for trial in trials
+    ]
+    best_indices = sorted(
+        enumerate(values),
+        key=lambda x: x[1],
+        reverse=metric_info.goal.is_maximize
+    )
+    return [trials[i] for i, _ in best_indices[:count]]
+    
