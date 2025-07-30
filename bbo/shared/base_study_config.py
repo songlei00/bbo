@@ -76,6 +76,7 @@ class ProblemStatement:
     )
     metric_information: MetricInformationList = field(
         factory=MetricInformationList,
+        converter=MetricInformationList,
         validator=validators.instance_of(MetricInformationList)
     )
     metadata: Metadata = field(

@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+
+from bbo.shared.base_study_config import ProblemStatement, MetricInformation, ObjectiveMetricGoal
 from bbo.shared.trial import (
     Metric,
     MetricDict,
@@ -19,7 +22,8 @@ from bbo.shared.trial import (
     ParameterDict,
     Trial,
     Measurement,
-    TrialStatus
+    TrialStatus,
+    trial_is_better_than
 )
 
 
@@ -57,3 +61,62 @@ class TestTrial:
         assert trial.status == TrialStatus.COMPLETED
         assert trial.duration.total_seconds() > 0
         assert trial.infeasible
+
+
+@pytest.mark.parametrize('trial1, trial2, ps, expected', [
+    (
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        Trial({}, final_measurement=Measurement({'obj': 1.0})),
+        ProblemStatement(
+            metric_information=[MetricInformation(name='obj', goal=ObjectiveMetricGoal.MAXIMIZE)]
+        ),
+        False
+    ),
+    (
+        Trial({}, final_measurement=Measurement({'obj': 1.0})),
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        ProblemStatement(
+            metric_information=[MetricInformation(name='obj', goal=ObjectiveMetricGoal.MAXIMIZE)]
+        ),
+        True
+    ),
+    (
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        ProblemStatement(
+            metric_information=[MetricInformation(name='obj', goal=ObjectiveMetricGoal.MAXIMIZE)]
+        ),
+        False
+    ),
+    (
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        Trial({}, final_measurement=Measurement({'obj': 1.0})),
+        ProblemStatement(metric_information=[
+            MetricInformation(name='obj', goal=ObjectiveMetricGoal.MINIMIZE)
+        ]),
+        True
+    ),
+    (
+        Trial({}, final_measurement=Measurement({'obj': 1.0})),
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        ProblemStatement(metric_information=[
+            MetricInformation(name='obj', goal=ObjectiveMetricGoal.MINIMIZE)
+        ]),
+        False
+    ),
+    (
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        Trial({}, final_measurement=Measurement({'obj': 0.0})),
+        ProblemStatement(metric_information=[
+            MetricInformation(name='obj', goal=ObjectiveMetricGoal.MINIMIZE)
+        ]),
+        False
+    ),
+])
+def test_trial_is_better_than(
+    trial1: Trial,
+    trial2: Trial,
+    ps: ProblemStatement,
+    expected: bool
+):
+    assert trial_is_better_than(trial1, trial2, ps) == expected

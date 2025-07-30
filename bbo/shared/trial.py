@@ -261,3 +261,15 @@ class Trial:
         self.__setattr__('final_measurement', measurement)
         self.__setattr__('infeasibility_reason', infeasibility_reason)
         self.completion_time = datetime.datetime.now()
+
+
+def trial_is_better_than(
+    trial1: Trial,
+    trial2: Trial,
+    problem_statement
+) -> bool:
+    metric_info = problem_statement.metric_information_item()
+    if metric_info.goal.is_maximize:
+        return trial1.final_measurement.metrics[metric_info.name].value > trial2.final_measurement.metrics[metric_info.name].value
+    else:
+        return trial1.final_measurement.metrics[metric_info.name].value < trial2.final_measurement.metrics[metric_info.name].value
