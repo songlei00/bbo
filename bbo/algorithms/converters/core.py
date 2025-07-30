@@ -14,6 +14,7 @@
 
 import abc
 import enum
+import copy
 from typing import Union, Tuple, Optional, Callable, Sequence, List, Dict, Collection, TypeVar, Generic
 from collections import UserDict, defaultdict
 
@@ -382,20 +383,42 @@ class DefaultModelOutputConverter(ModelOutputConverter):
     def __init__(
         self,
         metric_information: MetricInformation,
+        *,
+        flip_sign_for_minimization_metrics: bool = False,
         dtype: np.dtypes = np.float32
     ):
-        self.metric_information = metric_information
+        self._original_metric_information = metric_information
+        self.flip_sign_for_minimization_metrics = flip_sign_for_minimization_metrics
         self.dtype = dtype
+
+    @property
+    def _should_flip_sign(self) -> bool:
+        return (
+            self._original_metric_information.goal.is_minimize and \
+            self.flip_sign_for_minimization_metrics
+        )
 
     def convert(self, measurements: Sequence[Measurement]) -> np.ndarray:
         if not measurements:
             return np.zeros((0, 1), dtype=self.dtype)
-        labels = [m.metrics[self.metric_information.name].value for m in measurements]
-        labels = np.asarray(labels, dtype=self.dtype)
-        return labels.reshape(-1, 1)
+        labels = [m.metrics[self._original_metric_information.name].value for m in measurements]
+        labels = np.asarray(labels, dtype=self.dtype).reshape(-1, 1)
+        if self._should_flip_sign:
+            labels = -labels
+        return labels
 
     def to_metrics(self, array: np.ndarray) -> List[Optional[Metric]]:
+        if self._should_flip_sign:
+            array = -array
         return [Metric(v) for v in array.flatten()]
+    
+    @property
+    def metric_information(self) -> MetricInformation:
+        metric_info = copy.deepcopy(self._original_metric_information)
+        if self._should_flip_sign:
+            return metric_info.flip_goal()
+        else:
+            return metric_info
 
 
 class TrialConverter(abc.ABC):
@@ -512,14 +535,19 @@ class DefaultTrialConverter(TrialConverter):
         onehot_embed: bool = False,
         pad_oovs: bool = False,
         should_clip: bool = True,
-        max_discrete_indices: int | None = None
+        max_discrete_indices: int | None = None,
+        flip_sign_for_minimization_metrics: bool = False
     ):
         parameter_converters = [
             DefaultModelInputConverter(p, float_dtype, int_dtype, scale, onehot_embed, pad_oovs, should_clip, max_discrete_indices)
             for p in study_config.search_space.parameter_configs.values()
         ]
         output_converters = [
-            DefaultModelOutputConverter(m, float_dtype)
+            DefaultModelOutputConverter(
+                m,
+                flip_sign_for_minimization_metrics=flip_sign_for_minimization_metrics,
+                dtype=float_dtype
+            )
             for m in study_config.metric_information
         ]
         return cls(parameter_converters, output_converters)
@@ -575,11 +603,12 @@ class TrialToArrayConverter(TrialConverter):
         onehot_embed: bool = False,
         pad_oovs: bool = False,
         should_clip: bool = True,
-        max_discrete_indices: int | None = None
+        max_discrete_indices: int | None = None,
+        flip_sign_for_minimization_metrics: bool = False
     ):
 
         return cls(DefaultTrialConverter.from_study_config(
-            study_config, float_dtype, int_dtype, scale, onehot_embed, pad_oovs, should_clip, max_discrete_indices
+            study_config, float_dtype, int_dtype, scale, onehot_embed, pad_oovs, should_clip, max_discrete_indices, flip_sign_for_minimization_metrics
         ))
 
     @property
@@ -665,10 +694,11 @@ class TrialToTypeArrayConverter(TrialConverter):
         scale: bool = True,
         pad_oovs: bool = False,
         should_clip: bool = True,
-        max_discrete_indices: int | None = None
+        max_discrete_indices: int | None = None,
+        flip_sign_for_minimization_metrics: bool = False
     ):
         return cls(
             DefaultTrialConverter.from_study_config(
-                study_config, float_dtype, int_dtype, scale, False, pad_oovs, should_clip, max_discrete_indices
+                study_config, float_dtype, int_dtype, scale, False, pad_oovs, should_clip, max_discrete_indices, flip_sign_for_minimization_metrics
             )
         )

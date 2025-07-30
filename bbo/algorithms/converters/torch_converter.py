@@ -68,10 +68,12 @@ class TrialToTorchConverter(TrialConverter):
         scale: bool = True,
         pad_oovs: bool = False,
         should_clip: bool = True,
-        max_discrete_indices: int | None = None
+        max_discrete_indices: int | None = None,
+        flip_sign_for_minimization_metrics: bool = False
     ):
+        # TODO: input torch.dtypes instead of np.dtypes
         return cls(
             TrialToTypeArrayConverter.from_study_config(
-                study_config, float_dtype, int_dtype, scale, pad_oovs, should_clip, max_discrete_indices
+                study_config, float_dtype, int_dtype, scale, pad_oovs, should_clip, max_discrete_indices, flip_sign_for_minimization_metrics
             )
         )

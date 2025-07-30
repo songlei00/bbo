@@ -19,10 +19,12 @@ import numpy as np
 from bbo.algorithms.converters.core import (
     NumpyArraySpecType,
     DictOf2DArray,
+    DefaultModelOutputConverter,
     DefaultTrialConverter,
     TrialToArrayConverter,
     TrialToTypeArrayConverter
 )
+from bbo.shared.trial import Measurement
 from bbo.shared.base_study_config import ProblemStatement, MetricInformation, ObjectiveMetricGoal
 from bbo.utils.testing import create_dummy_ps, generate_trials, compare_trials_xy
 
@@ -39,6 +41,38 @@ def test_dict_of_2d_array():
     array = d_2darray.to_array()
     assert array.tolist() == [[1, 2, 5], [3, 4, 6]]
     assert d_2darray.to_dict(array) == d_2darray
+
+
+class TestFlipSign:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.name = 'obj'
+        self.n = 10
+        self.measurements = [Measurement({self.name: i}) for i in range(self.n)]
+
+    def test_flip_sign_for_minimization_metrics(self):
+        metric_info = MetricInformation(self.name, ObjectiveMetricGoal.MINIMIZE)
+        output_converter = DefaultModelOutputConverter(metric_info, flip_sign_for_minimization_metrics=True)
+
+        # Test converter
+        labels = output_converter.convert(self.measurements)
+        assert (labels == -np.asarray([i for i in range(self.n)]).reshape(-1, 1)).all()
+        
+        metrics = output_converter.to_metrics(labels)
+        for i in range(self.n):
+            assert metrics[i].value == i
+
+        # Test metric information
+        fliped_metric_info = output_converter.metric_information
+        assert fliped_metric_info.goal.is_maximize
+        assert metric_info.goal.is_minimize
+
+    def test_no_flip_sign(self):
+        metric_info = MetricInformation(self.name, ObjectiveMetricGoal.MINIMIZE)
+        output_converter = DefaultModelOutputConverter(metric_info)
+        labels = output_converter.convert(self.measurements)
+        assert (labels == np.asarray([i for i in range(self.n)]).reshape(-1, 1)).all()
+        assert output_converter.metric_information == metric_info
 
 
 class TestDefaultTrialConverter:
