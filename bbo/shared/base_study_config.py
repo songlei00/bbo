@@ -58,6 +58,13 @@ class MetricInformation:
     @property
     def range(self):
         return self.max_value - self.min_value
+    
+    def flip_goal(self) -> 'MetricInformation':
+        if self.goal.is_maximize:
+            self.goal = ObjectiveMetricGoal.MINIMIZE
+        else:
+            self.goal = ObjectiveMetricGoal.MAXIMIZE
+        return self
 
 
 class MetricInformationList(UserList[MetricInformation]):
