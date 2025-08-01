@@ -9,7 +9,7 @@ from bbo.algorithms.abstractions import Designer, CompletedTrials, ActiveTrials,
 from bbo.algorithms.designers import RandomDesigner, RegularizedEvolutionDesigner1
 from bbo.algorithms.converters.core import TrialConverter
 from bbo.algorithms.converters.torch_converter import TrialToTorchConverter
-from bbo.algorithms.surrogates.gp.gp import GP
+from bbo.algorithms.surrogates.gpytorch_gp.gpytorch_gp import GPyTorchGP
 from bbo.algorithms.designers.bo.acquisitions import AcquisitionFunction, EI
 from bbo.algorithms.optimizers.base import GradientFreeOptimizer
 from bbo.algorithms.optimizers.designer_optimizer import DesignerAsOptimizer
@@ -20,8 +20,8 @@ from bbo.utils import logging_utils
 
 logger = logging_utils.get_logger(__name__)
 
-def default_surrogate_factory(train_X: torch.Tensor, train_Y: torch.Tensor):
-    return GP(train_X, train_Y)
+def default_surrogate_factory(train_X: torch.Tensor, train_Y: torch.Tensor, device: str | torch.device):
+    return GPyTorchGP(train_X, train_Y, device=device)
 
 def default_acquisition_optimizer_factory(
     seed_or_rng: Optional[Union[int, np.random.Generator]] = None
@@ -81,7 +81,7 @@ class BODesigner(Designer):
             self._problem_statement,
             flip_sign_for_minimization_metrics=True
         )
-        if self._device.startswith('cuda') and not torch.cuda.is_available():
+        if isinstance(self._device, str) and self._device.startswith('cuda') and not torch.cuda.is_available():
             logger.warning(f"Device {self._device} is not available. Use CPU")
         self._device = torch.device(self._device if torch.cuda.is_available() else 'cpu')
 
@@ -102,7 +102,7 @@ class BODesigner(Designer):
             X, Y = self._transform_X(X), self._transform_Y(Y)
             
             # Train surrogate model
-            surrogate = self._surrogate_factory(X, Y).to(self._device)
+            surrogate = self._surrogate_factory(X, Y, self._device)
             surrogate.train()
 
             # Acquisition optimization

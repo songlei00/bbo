@@ -1,0 +1,1 @@
+from bbo.algorithms.surrogates.gpytorch_gp.gpytorch_gp import GPyTorchGP
