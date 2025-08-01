@@ -30,7 +30,8 @@ class DesignerAsOptimizer(GradientFreeOptimizer):
         trials = []
         for _ in range(num_iterations):
             suggestions = designer.suggest(self._batch_size)
-            scores = score_fn(suggestions)
+            with torch.no_grad():
+                scores = score_fn(suggestions)
             for i, suggestion in enumerate(suggestions):
                 suggestion.complete(Measurement({
                     k: v[i].item() for k, v in scores.items()

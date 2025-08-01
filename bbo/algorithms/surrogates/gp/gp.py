@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Union
+
 import torch
 import torch.nn as nn
 from attrs import define, field, validators
@@ -70,3 +72,9 @@ class GP(Surrogate):
         v = torch.linalg.solve_triangular(chol, cov.transpose(-2, -1), upper=False)
         var = self._cov_module(query_X, query_X) - v.transpose(-2, -1) @ v
         return mu, var
+    
+    def to(self, device: Union[str, torch.device, int]):
+        # TODO: check GPU
+        self._mean_module.to(device)
+        self._cov_module.to(device)
+        return self

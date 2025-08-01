@@ -15,17 +15,28 @@
 import torch
 import pytest
 
-from bbo.algorithms.surrogates.gp import kernels, kernel_impl
+from bbo.algorithms.surrogates.gp import kernels, kernel_impl, warpers
 
 bs, n1, n2, d = 4, 20, 10, 3
 
 
 @pytest.mark.parametrize("kernel", [
+    # Test basic kernel
     kernels.RBFKernel(),
     kernels.Matern52Kernel(),
     kernels.TemplateKernel(kernel_impl.rbf_cdist),
     kernels.TemplateKernel(kernel_impl.matern52_cdist),
-    kernels.ScaleKernel(kernels.RBFKernel())
+    # Test scale kernel
+    kernels.ScaleKernel(kernels.RBFKernel()),
+    # Test warp kernel
+    kernels.WarpKernel(
+        base_kernel=kernels.ScaleKernel(kernels.RBFKernel()),
+        warp_module=warpers.KumarWarp()
+    ),
+    kernels.WarpKernel(
+        base_kernel=kernels.ScaleKernel(kernels.RBFKernel(ard_dim=10)),
+        warp_module=warpers.MLPWarp(d, [32,], 10)
+    )
 ])
 class TestKernelRun:
     def test_kernel_2d(self, kernel):

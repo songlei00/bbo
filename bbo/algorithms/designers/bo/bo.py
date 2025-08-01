@@ -6,8 +6,7 @@ import numpy as np
 import torch
 
 from bbo.algorithms.abstractions import Designer, CompletedTrials, ActiveTrials, Surrogate
-from bbo.algorithms.designers.random import RandomDesigner
-from bbo.algorithms.designers.evolution.re1 import RegularizedEvolutionDesigner1
+from bbo.algorithms.designers import RandomDesigner, RegularizedEvolutionDesigner1
 from bbo.algorithms.converters.core import TrialConverter
 from bbo.algorithms.converters.torch_converter import TrialToTorchConverter
 from bbo.algorithms.surrogates.gp.gp import GP
@@ -67,6 +66,7 @@ class BODesigner(Designer):
     _init_designer: Designer = field(validator=validators.instance_of(Designer), init=False)
     _converter: TrialConverter = field(validator=validators.instance_of(TrialConverter), init=False)
     _trials: List[Trial] = field(factory=list, init=False)
+    _metadata_ns: str = field(default='bo', init=False)
 
     def __attrs_post_init__(self):
         if self._problem_statement.search_space.num_parameters(ParameterType.DOUBLE) != \
@@ -102,7 +102,7 @@ class BODesigner(Designer):
             X, Y = self._transform_X(X), self._transform_Y(Y)
             
             # Train surrogate model
-            surrogate = self._surrogate_factory(X, Y) # .to(self._device)
+            surrogate = self._surrogate_factory(X, Y).to(self._device)
             surrogate.train()
 
             # Acquisition optimization
@@ -110,9 +110,8 @@ class BODesigner(Designer):
             def score_fn(trials: Sequence[Trial]):
                 X = self._converter.to_features(trials)
                 X = self._transform_X(X).unsqueeze(-2)
-                with torch.no_grad():
-                    mu, var = surrogate.predict(X)
-                    acqf_values = acqf_fn(mu, var.sqrt())
+                mu, var = surrogate.predict(X)
+                acqf_values = acqf_fn(mu, var.sqrt())
                 return {self._acquisition_problem.metric_information_item().name: acqf_values.detach().cpu()}
 
             best_trials = self._acquisition_optimizer.optimize(score_fn, self._acquisition_problem)

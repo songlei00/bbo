@@ -26,9 +26,12 @@ def squareplus(X: torch.Tensor):
 
 
 class TemplateKernel(nn.Module):
-    def __init__(self, impl: kernel_impl.KernelProtocol):
+    def __init__(self, impl: kernel_impl.KernelProtocol, ard_dim: int | None = None):
         super(TemplateKernel, self).__init__()
-        self.lengthscale = nn.Parameter(torch.randn(()))
+        if ard_dim is not None:
+            self.lengthscale = nn.Parameter(torch.randn(ard_dim))
+        else:
+            self.lengthscale = nn.Parameter(torch.randn(()))
         self.transform = F.softplus
         self.impl = impl
 
@@ -51,3 +54,15 @@ class ScaleKernel(nn.Module):
     def forward(self, X1: torch.Tensor, X2: torch.Tensor):
         variance = self.transform(self.variance)
         return variance * self.base_kernel(X1, X2)
+    
+
+class WarpKernel(nn.Module):
+    def __init__(self, base_kernel: nn.Module, warp_module: nn.Module):
+        super(WarpKernel, self).__init__()
+        self.warp_module = warp_module
+        self.base_kernel = base_kernel
+
+    def forward(self, X1: torch.Tensor, X2: torch.Tensor):
+        X1 = self.warp_module(X1)
+        X2 = self.warp_module(X2)
+        return self.base_kernel(X1, X2)
