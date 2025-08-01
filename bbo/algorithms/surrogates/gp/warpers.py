@@ -33,21 +33,16 @@ class MLPWarp(nn.Module):
         self,
         in_d: int,
         hidden_d: List[int],
-        out_d: int,
         norm: Optional[nn.Module] = None,
         activation: nn.Module = nn.Tanh,
         dropout: float = 0.0,
-        bias: bool = True,
-        activation_out: Optional[nn.Module] = None
+        bias: bool = True
     ):
         super(MLPWarp, self).__init__()
         layers = []
         for i in range(len(hidden_d)):
             layers.append(MLPBlock(in_d, hidden_d[i], norm, activation, dropout, bias))
             in_d = hidden_d[i]
-        layers.append(nn.Linear(in_d, out_d, bias))
-        if activation_out is not None:
-            layers.append(activation_out())
         self.layers = nn.Sequential(*layers)
     
     def forward(self, X: torch.Tensor) -> torch.Tensor:

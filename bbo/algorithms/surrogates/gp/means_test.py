@@ -15,22 +15,23 @@
 import torch
 import pytest
 
-from bbo.algorithms.surrogates.gp.means import ConstantMean
+from bbo.algorithms.surrogates.gp.warpers import MLPWarp
+from bbo.algorithms.surrogates.gp.means import ConstantMean, MLPMean
+
+bs, n, d = 20, 10, 5
 
 
 @pytest.mark.parametrize('mean', [
-    ConstantMean()
+    ConstantMean(),
+    MLPMean(16, MLPWarp(d, [16, 16]))
 ])
-def test_mean_2d(mean):
-    X = torch.randn(10, 2)
-    m = mean(X)
-    assert m.shape == (10, 1)
+class TestMeanRun:
+    def test_mean_2d(self, mean):
+        X = torch.randn(n, d)
+        m = mean(X)
+        assert m.shape == (n, 1)
 
-
-@pytest.mark.parametrize('mean', [
-    ConstantMean()
-])
-def test_mean_3d(mean):
-    X = torch.randn(20, 10, 2)
-    m = mean(X)
-    assert m.shape == (20, 10, 1)
+    def test_mean_3d(self, mean):
+        X = torch.randn(bs, n, d)
+        m = mean(X)
+        assert m.shape == (bs, n, 1)

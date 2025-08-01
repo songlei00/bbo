@@ -23,3 +23,13 @@ class ConstantMean(nn.Module):
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         return self.constant.expand(*X.shape[:-1], 1)
+    
+
+class MLPMean(nn.Module):
+    def __init__(self, in_d: int, warp_module: nn.Module):
+        super(MLPMean, self).__init__()
+        self.warp_module = warp_module
+        self.mean = nn.Linear(in_d, 1)
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        return self.mean(self.warp_module(X))

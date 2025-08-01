@@ -31,7 +31,6 @@ class GP(Surrogate):
     _Y: torch.Tensor = field(validator=attrs_utils.assert_2dtensor)
     _mean_module: nn.Module = field(factory=lambda: ConstantMean())
     _cov_module: nn.Module = field(factory=lambda: Matern52Kernel())
-    _warp_module: nn.Module | None = field(default=None)
 
     # Training config
     _lr: float = field(default=0.01, converter=float, validator=validators.instance_of(float))
@@ -47,7 +46,7 @@ class GP(Surrogate):
         optimizer = torch.optim.Adam(params, lr=self._lr)
         for epoch in range(self._epochs):
             loss = self._objective(
-                self._X, self._Y, self._mean_module, self._cov_module, self._warp_module, self._noise_variance
+                self._X, self._Y, self._mean_module, self._cov_module, self._noise_variance
             )
             optimizer.zero_grad()
             loss.backward()
@@ -61,7 +60,6 @@ class GP(Surrogate):
                     self._Y,
                     self._mean_module,
                     self._cov_module,
-                    self._warp_module,
                     self._noise_variance
                 )
         chol, kinv = self._cached_chol, self._cached_kinvy
@@ -70,7 +68,8 @@ class GP(Surrogate):
         if cov.ndim == 3:
             chol = chol.unsqueeze(0)
         v = torch.linalg.solve_triangular(chol, cov.transpose(-2, -1), upper=False)
-        var = self._cov_module(query_X, query_X) - v.transpose(-2, -1) @ v
+        var = self._cov_module(query_X, query_X) - v.transpose(-2, -1) @ v + \
+            self._noise_variance * torch.eye(query_X.shape[0]).to(query_X.device)
         return mu, var
     
     def to(self, device: Union[str, torch.device, int]):
